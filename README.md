@@ -6,7 +6,7 @@ The goal is to make an intelligent system that could help anesthesiologist to qu
 
 ## Project Overview
 -Collect anesthesia-related documents as knoweldge base.
--
+-Use a **retriever** to fetch relevant document chunks.
 
 ---
 
