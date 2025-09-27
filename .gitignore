@@ -1,0 +1,16 @@
+# Ignore data directory (raw/processed docs, embeddings, etc.)
+data/
+
+# Ignore Python virtual environment
+venv/
+
+# Ignore environment variables file
+.env
+
+# (optional) Python cache & junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+.ipynb_checkpoints/
