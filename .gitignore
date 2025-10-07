@@ -14,3 +14,25 @@ __pycache__/
 *.pyd
 *.pkl
 .ipynb_checkpoints/
+
+
+
+
+# Uploaded PDFs
+uploads/
+
+# Logs
+logs/
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Docker
+*.pid
+*.sock

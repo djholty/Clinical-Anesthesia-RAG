@@ -31,3 +31,8 @@ pytube
 numexpr
 huggingface_hub
 markitdown
+
+fastapi
+uvicorn
+python-multipart
+streamlit
