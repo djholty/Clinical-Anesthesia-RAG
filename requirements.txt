@@ -36,3 +36,6 @@ fastapi
 uvicorn
 python-multipart
 streamlit
+rank_bm25
+ollama
+sentence-transformers
