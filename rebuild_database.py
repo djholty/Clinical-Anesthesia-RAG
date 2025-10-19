@@ -17,7 +17,7 @@ load_dotenv()
 os.environ["HF_TOKEN"] = os.getenv("HF_TOKEN")
 
 # Paths
-MARKDOWN_DIR = "./RAG_markdown_output_files"
+MARKDOWN_DIR = "./ingested_documents"
 DB_DIR = "./data/chroma_db"
 OLD_DB_DIR = "./data/optimized_2000_markdown_chroma_db"
 
