@@ -31,3 +31,11 @@ pytube
 numexpr
 huggingface_hub
 markitdown
+
+fastapi
+uvicorn
+python-multipart
+streamlit
+rank_bm25
+ollama
+sentence-transformers

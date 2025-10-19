@@ -15,4 +15,28 @@ __pycache__/
 *.pkl
 .ipynb_checkpoints/
 
+<<<<<<< HEAD
 .DS_Store
+=======
+
+
+
+# Uploaded PDFs
+uploads/
+
+# Logs
+logs/
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Docker
+*.pid
+*.sock
+>>>>>>> dev
