@@ -11,31 +11,35 @@ st.set_page_config(page_title="Clinical Anesthesia QA System", layout="wide")
 st.title("💉 Clinical Anesthesia QA System")
 st.write("Interact with your custom RAG model using uploaded PDF guidelines.")
 
-# --- File upload section ---
-st.sidebar.header("📄 Upload a new PDF")
-
-uploaded_file = st.sidebar.file_uploader("Upload a PDF document", type=["pdf"])
-
-if uploaded_file:
-    with st.spinner("Uploading and processing PDF..."):
-        files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
-        response = requests.post(f"{API_URL}/upload", files=files)
-
-        if response.status_code == 200:
-            result = response.json()
-            st.sidebar.success(f"✅ {result['status']}")
-            st.sidebar.write(f"**File:** {result['filename']}")
-            st.sidebar.write(f"**Chunks Added:** {result['chunks_added']}")
-        else:
-            st.sidebar.error(f"❌ Upload failed: {response.text}")
-
-st.divider()
+# # --- File upload section (COMMENTED OUT) ---
+# st.sidebar.header("📄 Upload a new PDF")
+# 
+# uploaded_file = st.sidebar.file_uploader("Upload a PDF document", type=["pdf"])
+# 
+# if uploaded_file:
+#     with st.spinner("Uploading and processing PDF..."):
+#         files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+#         response = requests.post(f"{API_URL}/upload", files=files)
+# 
+#         if response.status_code == 200:
+#             result = response.json()
+#             st.sidebar.success(f"✅ {result['status']}")
+#             st.sidebar.write(f"**File:** {result['filename']}")
+#             st.sidebar.write(f"**Chunks Added:** {result['chunks_added']}")
+#         else:
+#             st.sidebar.error(f"❌ Upload failed: {response.text}")
+# 
+# st.divider()
 
 # --- Chat section ---
 st.header("💬 Ask a Question")
 
-question = st.text_input("Enter your question:", placeholder="e.g., What are the induction agents commonly used in anesthesia?")
-if st.button("Ask", use_container_width=True):
+# Use a form to enable Enter key submission
+with st.form(key="question_form", clear_on_submit=False):
+    question = st.text_input("Enter your question:", placeholder="e.g., What are the induction agents commonly used in anesthesia?")
+    submit_button = st.form_submit_button("Ask", use_container_width=True)
+
+if submit_button:
     if not question.strip():
         st.warning("Please enter a question.")
     else:

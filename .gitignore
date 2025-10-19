@@ -3,6 +3,7 @@ data/
 
 # Ignore Python virtual environment
 venv/
+.venv/
 
 # Ignore environment variables file
 .env
