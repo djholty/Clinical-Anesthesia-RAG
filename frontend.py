@@ -8,6 +8,24 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 st.set_page_config(page_title="Clinical Anesthesia QA System", layout="wide")
 
+# Custom CSS to change the red form border to blue
+st.markdown("""
+<style>
+    /* Change the red form border to blue */
+    [data-testid="stForm"] {
+        border: 2px solid #1f77b4 !important;
+        border-radius: 0.5rem !important;
+        padding: 1rem !important;
+    }
+    
+    /* Override any red borders */
+    [data-testid="stForm"]:focus-within {
+        border-color: #1f77b4 !important;
+        box-shadow: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("💉 Clinical Anesthesia QA System")
 st.write("Interact with your custom RAG model using uploaded PDF guidelines.")
 
@@ -47,8 +65,8 @@ if submit_button:
             response = requests.post(f"{API_URL}/ask", json={"question": question})
             if response.status_code == 200:
                 answer = response.json()["answer"]
-                st.success("✅ Answer retrieved successfully!")
-                st.markdown(f"**Answer:** {answer}")
+                st.markdown("### Answer")
+                st.info(answer)
             else:
                 st.error(f"❌ Error: {response.text}")
 
