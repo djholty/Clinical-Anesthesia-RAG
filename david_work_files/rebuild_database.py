@@ -80,7 +80,7 @@ if __name__ == "__main__":
     # Check if markdown directory exists
     if not os.path.exists(MARKDOWN_DIR):
         print(f"❌ Error: Markdown directory not found: {MARKDOWN_DIR}")
-        print("   Please make sure RAG_markdown_output_files exists.")
+        print("   Please make sure data/ingested_documents exists.")
         exit(1)
     
     # Count markdown files
