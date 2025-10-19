@@ -254,36 +254,37 @@ elif page == "📊 Monitoring Dashboard":
                     if all_evals_response.status_code == 200:
                         all_evals = all_evals_response.json()['evaluations']
                         
-                        if len(all_evals) > 1:
-                            # Create trend chart
-                            df_trends = pd.DataFrame(all_evals)
-                            df_trends['timestamp'] = pd.to_datetime(df_trends['timestamp'], errors='coerce')
-                            df_trends = df_trends.sort_values('timestamp')
-                            
-                            fig = px.line(
-                                df_trends, 
-                                x='timestamp', 
-                                y='average_score',
-                                markers=True,
-                                title='Accuracy Over Time',
-                                labels={'average_score': 'Average Score (%)', 'timestamp': 'Date'}
-                            )
-                            fig.update_layout(height=400)
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Show table of all evaluations
-                            st.subheader("All Evaluation Runs")
-                            st.dataframe(
-                                df_trends[['timestamp', 'total_questions', 'average_score']].rename(columns={
-                                    'timestamp': 'Date',
-                                    'total_questions': 'Questions',
-                                    'average_score': 'Avg Score (%)'
-                                }),
-                                use_container_width=True
-                            )
-                        else:
-                            st.info("Run multiple evaluations over time to see trends. Currently showing only one evaluation.")
-                            st.write("To run a new evaluation: `python david_work_files/evaluate_rag.py`")
+                    if len(all_evals) > 1:
+                        # Create trend chart
+                        df_trends = pd.DataFrame(all_evals)
+                        # Parse timestamp format: YYYYMMDD_HHMMSS
+                        df_trends['timestamp'] = pd.to_datetime(df_trends['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
+                        df_trends = df_trends.sort_values('timestamp')
+                        
+                        fig = px.line(
+                            df_trends, 
+                            x='timestamp', 
+                            y='average_score',
+                            markers=True,
+                            title='Accuracy Over Time',
+                            labels={'average_score': 'Average Score (%)', 'timestamp': 'Date'}
+                        )
+                        fig.update_layout(height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Show table of all evaluations
+                        st.subheader("All Evaluation Runs")
+                        st.dataframe(
+                            df_trends[['timestamp', 'total_questions', 'average_score']].rename(columns={
+                                'timestamp': 'Date',
+                                'total_questions': 'Questions',
+                                'average_score': 'Avg Score (%)'
+                            }),
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("Run multiple evaluations over time to see trends. Currently showing only one evaluation.")
+                        st.write("To run a new evaluation: `python david_work_files/evaluate_rag.py`")
                 except Exception as e:
                     st.error(f"Error fetching historical data: {e}")
         

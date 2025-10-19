@@ -85,8 +85,26 @@ def evaluate_answer(question, expected_answer, rag_answer):
         
         # Parse JSON response
         import json
-        result = json.loads(response.content)
-        return result['score'], result['reasoning']
+        import re
+        
+        # Try to extract JSON from response
+        content = response.content
+        
+        # Look for JSON object in the response
+        json_match = re.search(r'\{[^}]*"score"[^}]*\}', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            result = json.loads(json_str)
+            return result['score'], result.get('reasoning', 'No reasoning provided')
+        else:
+            # If no JSON found, try parsing the whole content
+            result = json.loads(content)
+            return result['score'], result.get('reasoning', 'No reasoning provided')
+            
+    except json.JSONDecodeError as e:
+        # If JSON parsing fails, assign a default score and use the raw response
+        print(f"  ⚠️  JSON parsing error: {e}")
+        return 50, f"Could not parse evaluation. Raw response: {response.content[:200]}"
     except Exception as e:
         print(f"  ⚠️  Evaluation error: {e}")
         return 0, f"Error: {str(e)}"
@@ -199,15 +217,15 @@ if __name__ == "__main__":
     from datetime import datetime
     
     # Path to your prompt set
-    PROMPT_FILE = "./david_work_files/prompt_set.xlsx"
+    PROMPT_FILE = "./monitoring/prompt_set.xlsx"
     
     # Create timestamped output file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs("./david_work_files/evaluations", exist_ok=True)
-    OUTPUT_FILE = f"./david_work_files/evaluations/evaluation_{timestamp}.csv"
+    os.makedirs("./monitoring/evaluations", exist_ok=True)
+    OUTPUT_FILE = f"./monitoring/evaluations/evaluation_{timestamp}.csv"
     
     # Also save as latest
-    LATEST_FILE = "./david_work_files/evaluation_results.csv"
+    LATEST_FILE = "./monitoring/evaluation_results.csv"
     
     # Check if file exists
     if not os.path.exists(PROMPT_FILE):

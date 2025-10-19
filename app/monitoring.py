@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Directory for storing evaluation results
-EVAL_DIR = "./david_work_files/evaluations"
+EVAL_DIR = "./monitoring/evaluations"
 os.makedirs(EVAL_DIR, exist_ok=True)
 
 def get_latest_evaluation():
@@ -16,7 +16,7 @@ def get_latest_evaluation():
     
     if not eval_files:
         # Check for default file
-        default_file = "./david_work_files/evaluation_results.csv"
+        default_file = "./monitoring/evaluation_results.csv"
         if os.path.exists(default_file):
             df = pd.read_csv(default_file)
             return {
