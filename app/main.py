@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from app.rag_pipeline import query_rag, add_pdf_to_db, list_documents, delete_document
+from app.monitoring import get_latest_evaluation, get_all_evaluations, get_evaluation_by_timestamp
 import shutil
 import os
 
@@ -49,4 +50,25 @@ def get_list_of_documents():
 def delete_file_docs(request: DeleteRequest):
     """Delete all document chunks from a specific file in Chroma."""
     result = delete_document(request.filename)
+    return result
+
+@app.get("/monitoring/latest")
+def get_latest_eval():
+    """Get the most recent evaluation results."""
+    result = get_latest_evaluation()
+    if result is None:
+        return {"error": "No evaluation results found"}
+    return result
+
+@app.get("/monitoring/all")
+def get_all_evals():
+    """Get summary of all evaluation runs."""
+    return {"evaluations": get_all_evaluations()}
+
+@app.get("/monitoring/{timestamp}")
+def get_eval_by_timestamp(timestamp: str):
+    """Get specific evaluation by timestamp."""
+    result = get_evaluation_by_timestamp(timestamp)
+    if result is None:
+        return {"error": f"Evaluation not found for timestamp: {timestamp}"}
     return result
