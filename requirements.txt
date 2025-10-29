@@ -40,3 +40,7 @@ plotly
 rank_bm25
 ollama
 sentence-transformers
+docling
+tqdm
+tenacity
+watchdog
