@@ -24,10 +24,10 @@ def get_latest_evaluation():
                 "total_questions": len(df),
                 "average_score": float(df['score'].mean()),
                 "score_distribution": {
-                    "excellent": int(len(df[df['score'] >= 90])),
-                    "good": int(len(df[(df['score'] >= 70) & (df['score'] < 90)])),
-                    "fair": int(len(df[(df['score'] >= 50) & (df['score'] < 70)])),
-                    "poor": int(len(df[df['score'] < 50]))
+                    "excellent": int(len(df[df['score'] == 4])),
+                    "good": int(len(df[df['score'] == 3])),
+                    "fair": int(len(df[df['score'] == 2])),
+                    "poor": int(len(df[df['score'] == 1]))
                 },
                 "results": df.to_dict('records')
             }
@@ -45,10 +45,10 @@ def get_latest_evaluation():
         "total_questions": len(df),
         "average_score": float(df['score'].mean()),
         "score_distribution": {
-            "excellent": int(len(df[df['score'] >= 90])),
-            "good": int(len(df[(df['score'] >= 70) & (df['score'] < 90)])),
-            "fair": int(len(df[(df['score'] >= 50) & (df['score'] < 70)])),
-            "poor": int(len(df[df['score'] < 50]))
+            "excellent": int(len(df[df['score'] == 4])),
+            "good": int(len(df[df['score'] == 3])),
+            "fair": int(len(df[df['score'] == 2])),
+            "poor": int(len(df[df['score'] == 1]))
         },
         "results": df.to_dict('records')
     }
@@ -85,10 +85,10 @@ def get_evaluation_by_timestamp(timestamp):
         "total_questions": len(df),
         "average_score": float(df['score'].mean()),
         "score_distribution": {
-            "excellent": int(len(df[df['score'] >= 90])),
-            "good": int(len(df[(df['score'] >= 70) & (df['score'] < 90)])),
-            "fair": int(len(df[(df['score'] >= 50) & (df['score'] < 70)])),
-            "poor": int(len(df[df['score'] < 50]))
+            "excellent": int(len(df[df['score'] == 4])),
+            "good": int(len(df[df['score'] == 3])),
+            "fair": int(len(df[df['score'] == 2])),
+            "poor": int(len(df[df['score'] == 1]))
         },
         "results": df.to_dict('records')
     }

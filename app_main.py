@@ -100,8 +100,8 @@ elif page == "📊 Monitoring Dashboard":
                 with col1:
                     st.metric(
                         "Overall Accuracy", 
-                        f"{data['average_score']:.1f}%",
-                        help="Average score across all questions"
+                        f"{data['average_score']:.2f}/4",
+                        help="Average score across all questions (out of 4)"
                     )
                 
                 with col2:
@@ -116,7 +116,7 @@ elif page == "📊 Monitoring Dashboard":
                     st.metric(
                         "Excellent Answers", 
                         f"{excellent_pct:.1f}%",
-                        help="Answers scoring 90-100"
+                        help="Answers scoring 4 (excellent)"
                     )
                 
                 with col4:
@@ -124,7 +124,7 @@ elif page == "📊 Monitoring Dashboard":
                     st.metric(
                         "Poor Answers", 
                         f"{poor_pct:.1f}%",
-                        help="Answers scoring below 50",
+                        help="Answers scoring 1 (poor)",
                         delta=f"-{poor_pct:.1f}%" if poor_pct > 0 else None,
                         delta_color="inverse"
                     )
@@ -138,7 +138,7 @@ elif page == "📊 Monitoring Dashboard":
                     st.subheader("Score Distribution")
                     dist_data = data['score_distribution']
                     fig = go.Figure(data=[go.Pie(
-                        labels=['Excellent (90-100)', 'Good (70-89)', 'Fair (50-69)', 'Poor (0-49)'],
+                        labels=['Excellent (4)', 'Good (3)', 'Fair (2)', 'Poor (1)'],
                         values=[dist_data['excellent'], dist_data['good'], dist_data['fair'], dist_data['poor']],
                         marker=dict(colors=['#00CC96', '#636EFA', '#FFA15A', '#EF553B']),
                         hole=0.4
@@ -167,7 +167,7 @@ elif page == "📊 Monitoring Dashboard":
                     df = pd.DataFrame(data['results'])
                     top_5 = df.nlargest(5, 'score')[['question', 'score']]
                     for idx, row in top_5.iterrows():
-                        st.success(f"**Score: {row['score']}/100**")
+                        st.success(f"**Score: {row['score']}/4**")
                         st.write(f"Q: {row['question'][:100]}...")
                         st.write("")
                 
@@ -175,7 +175,7 @@ elif page == "📊 Monitoring Dashboard":
                     st.subheader("⚠️ Bottom 5 Answers (Need Improvement)")
                     bottom_5 = df.nsmallest(5, 'score')[['question', 'score']]
                     for idx, row in bottom_5.iterrows():
-                        st.error(f"**Score: {row['score']}/100**")
+                        st.error(f"**Score: {row['score']}/4**")
                         st.write(f"Q: {row['question'][:100]}...")
                         st.write("")
             
@@ -188,7 +188,7 @@ elif page == "📊 Monitoring Dashboard":
                 with col1:
                     score_filter = st.selectbox(
                         "Filter by score range",
-                        ["All", "Excellent (90-100)", "Good (70-89)", "Fair (50-69)", "Poor (0-49)"]
+                        ["All", "Excellent (4)", "Good (3)", "Fair (2)", "Poor (1)"]
                     )
                 
                 with col2:
@@ -202,13 +202,13 @@ elif page == "📊 Monitoring Dashboard":
                 
                 if score_filter != "All":
                     if "Excellent" in score_filter:
-                        df = df[df['score'] >= 90]
+                        df = df[df['score'] == 4]
                     elif "Good" in score_filter:
-                        df = df[(df['score'] >= 70) & (df['score'] < 90)]
+                        df = df[df['score'] == 3]
                     elif "Fair" in score_filter:
-                        df = df[(df['score'] >= 50) & (df['score'] < 70)]
+                        df = df[df['score'] == 2]
                     elif "Poor" in score_filter:
-                        df = df[df['score'] < 50]
+                        df = df[df['score'] == 1]
                 
                 if search_query:
                     df = df[df['question'].str.contains(search_query, case=False, na=False)]
@@ -224,9 +224,9 @@ elif page == "📊 Monitoring Dashboard":
                 
                 # Display results
                 for idx, row in df.iterrows():
-                    score_color = "🟢" if row['score'] >= 90 else "🟡" if row['score'] >= 70 else "🟠" if row['score'] >= 50 else "🔴"
+                    score_color = "🟢" if row['score'] == 4 else "🟡" if row['score'] == 3 else "🟠" if row['score'] == 2 else "🔴"
                     
-                    with st.expander(f"{score_color} Q{row['index'] + 1}: {row['question'][:80]}... - Score: {row['score']}/100"):
+                    with st.expander(f"{score_color} Q{row['index'] + 1}: {row['question'][:80]}... - Score: {row['score']}/4"):
                         st.markdown(f"**Question:** {row['question']}")
                         
                         st.divider()
@@ -267,7 +267,7 @@ elif page == "📊 Monitoring Dashboard":
                             y='average_score',
                             markers=True,
                             title='Accuracy Over Time',
-                            labels={'average_score': 'Average Score (%)', 'timestamp': 'Date'}
+                            labels={'average_score': 'Average Score (/4)', 'timestamp': 'Date'}
                         )
                         fig.update_layout(height=400)
                         st.plotly_chart(fig, use_container_width=True)
@@ -278,7 +278,7 @@ elif page == "📊 Monitoring Dashboard":
                             df_trends[['timestamp', 'total_questions', 'average_score']].rename(columns={
                                 'timestamp': 'Date',
                                 'total_questions': 'Questions',
-                                'average_score': 'Avg Score (%)'
+                                'average_score': 'Avg Score (/4)'
                             }),
                             use_container_width=True
                         )

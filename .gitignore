@@ -8,6 +8,9 @@ venv/
 # Ignore environment variables file
 .env
 
+# Ignore personal work files
+david_work_files/
+
 # (optional) Python cache & junk
 __pycache__/
 *.pyc
