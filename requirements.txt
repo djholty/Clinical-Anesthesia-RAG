@@ -36,6 +36,7 @@ fastapi
 uvicorn
 python-multipart
 streamlit
+plotly
 rank_bm25
 ollama
 sentence-transformers

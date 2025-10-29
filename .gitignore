@@ -3,9 +3,13 @@ data/
 
 # Ignore Python virtual environment
 venv/
+.venv/
 
 # Ignore environment variables file
 .env
+
+# Ignore personal work files
+david_work_files/
 
 # (optional) Python cache & junk
 __pycache__/
@@ -15,24 +19,4 @@ __pycache__/
 *.pkl
 .ipynb_checkpoints/
 
-
-
-
-# Uploaded PDFs
-uploads/
-
-# Logs
-logs/
-*.log
-
-# OS-specific
 .DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
-
-# Docker
-*.pid
-*.sock
