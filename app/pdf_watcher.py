@@ -19,6 +19,7 @@ Requires: watchdog, python-dotenv (optional if you set envs via container)
 """
 
 import os
+import sys
 import time
 import signal
 import threading
@@ -30,6 +31,11 @@ from dotenv import load_dotenv
 
 # Load env vars if present
 load_dotenv()
+
+# Ensure project root is on sys.path so `app.*` imports work when run as a script
+PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +49,7 @@ logger = logging.getLogger(__name__)
 PDF_WATCH_DIRECTORY = os.getenv("PDF_WATCH_DIRECTORY", "./data/pdfs")
 MD_OUTPUT_DIR = os.getenv("MD_OUTPUT_DIR", "./data/ingested_documents")
 PDF_QUIET_PERIOD_SECONDS = int(os.getenv("PDF_QUIET_PERIOD_SECONDS", "120"))
+PDF_CONVERT_ON_STARTUP = os.getenv("PDF_CONVERT_ON_STARTUP", "true").lower() == "true"
 
 # Global state
 convert_timer = None
@@ -142,6 +149,16 @@ def main():
 
     handler = PdfFileHandler()
     handler.scan_initial_state()
+
+    # Optional: convert any PDFs missing markdown on startup
+    if PDF_CONVERT_ON_STARTUP:
+        try:
+            from app.extract_pdf_to_markdown import process_pdfs_from_folder
+            logger.info("\n🔍 Startup scan: converting any PDFs missing corresponding .md files...")
+            process_pdfs_from_folder()
+            logger.info("✅ Startup conversion scan complete")
+        except Exception as e:
+            logger.error(f"❌ Startup conversion failed: {e}", exc_info=True)
 
     observer = Observer()
     observer.schedule(handler, str(watch_path), recursive=False)
