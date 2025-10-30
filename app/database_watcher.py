@@ -24,9 +24,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Add parent directory to path to import rebuild_database
+# Add parent directory to path to import app package
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from david_work_files.rebuild_database import rebuild_database
+from app.rebuild_database import rebuild_database
 
 # Configure logging
 logging.basicConfig(
