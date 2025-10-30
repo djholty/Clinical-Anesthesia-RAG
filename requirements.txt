@@ -40,6 +40,7 @@ plotly
 rank_bm25
 ollama
 sentence-transformers
+numpy
 docling
 tqdm
 tenacity

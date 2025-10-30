@@ -47,3 +47,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  pdf_watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinical-rag-pdf-watcher
+    volumes:
+      - ./data/pdfs:/app/data/pdfs
+      - ./data/ingested_documents:/app/data/ingested_documents
+    environment:
+      - PDF_WATCH_DIRECTORY=/app/data/pdfs
+      - MD_OUTPUT_DIR=/app/data/ingested_documents
+      - PDF_QUIET_PERIOD_SECONDS=120
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: unless-stopped
+    command: python app/pdf_watcher.py
