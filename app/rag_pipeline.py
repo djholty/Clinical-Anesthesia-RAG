@@ -1,10 +1,13 @@
 import os
+import time
+import re
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+import re as _re
 from langchain_core.runnables import RunnablePassthrough
 from dotenv import load_dotenv
 
@@ -17,13 +20,17 @@ os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# Persistent DB directory
-DB_DIR = "./data/chroma_db"
+# Persistent DB directory (can be overridden via env DB_DIR)
+DB_DIR = os.getenv("DB_DIR", "/data/chroma_db")
 vectordb = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
 retriever = vectordb.as_retriever()
 
-# LLM (Groq)
-llm = ChatGroq(model="llama-3.1-8b-instant")
+# LLM (Groq) - Configure with timeout
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    timeout=25.0,  # 25 second timeout to prevent hanging
+    max_retries=2  # Limit retries to prevent long waits
+)
 
 # Prompt Template
 prompt = ChatPromptTemplate.from_template("""
@@ -55,6 +62,10 @@ You are a clinical anesthesia assistant designed to help anesthesiologists with 
    - Provide clear, well-organized answers
    - Use bullet points or numbered lists for complex information
    - Structure responses for clinical clarity
+
+7. **Allowed Sources (Strict)**:
+   - Only cite from the following allowed source filenames: {allowed_sources}
+   - Do not invent or guess citations. If none of the allowed sources apply, state that the context is insufficient.
 
 ## Important Disclaimer:
 This is a decision support tool and does not replace clinical judgment. All information should be verified against current clinical guidelines and protocols. In emergency situations or when in doubt, consult with senior colleagues or relevant specialists.
@@ -91,9 +102,143 @@ retrieval_chain = (
 
 # === FUNCTION 1: Ask question ===
 def query_rag(question: str):
-    """Query the RAG pipeline with a user question."""
-    response = retrieval_chain.invoke({"input": question})
-    return response.content
+    """
+    Query the RAG pipeline with a user question.
+    
+    Args:
+        question (str): The user's question.
+        
+    Returns:
+        dict: Dictionary with 'answer' (str) and 'contexts' (List[dict]).
+              Each context dict contains:
+              - source (str): Filename of the source document
+              - page (int): Page number if available, else None
+              - content (str): The chunk content
+              - chunk_id (str): Optional chunk identifier if available
+    """
+    # Retrieve documents first
+    retrieved_docs = retriever.invoke(question)
+    
+    # Format documents for the prompt
+    formatted_context = format_docs(retrieved_docs)
+
+    # Build allowed sources set from retrieved documents (dynamic per request)
+    allowed_sources_set = set()
+    for doc in retrieved_docs:
+        if doc.metadata and "source" in doc.metadata:
+            source_path = doc.metadata["source"]
+            filename = source_path.split("/")[-1] if "/" in source_path else source_path
+            if filename:
+                allowed_sources_set.add(filename)
+    # If nothing retrieved, fail safely
+    if not allowed_sources_set:
+        return {
+            "answer": "The available context does not provide sufficient information to answer this question.",
+            "contexts": []
+        }
+    
+    # Get LLM response using prompt template with retry logic for rate limits
+    allowed_sources_str = ", ".join(sorted(allowed_sources_set)) if allowed_sources_set else "(none)"
+    messages = prompt.format_messages(input=question, context=formatted_context, allowed_sources=allowed_sources_str)
+    
+    # Retry logic for rate limit errors and timeouts
+    max_retries = 3  # Reduced from 5 to avoid long waits
+    last_exception = None
+    for attempt in range(max_retries):
+        try:
+            response = llm.invoke(messages)
+            break  # Success, exit retry loop
+        except Exception as e:
+            last_exception = e
+            error_str = str(e).lower()
+            
+            # Check for timeout errors
+            if 'timeout' in error_str or 'timed out' in error_str or 'read timeout' in error_str:
+                if attempt < max_retries - 1:
+                    # Wait a bit before retry, but shorter for timeouts
+                    wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise TimeoutError(
+                        f"Groq API request timed out after {max_retries} attempts. "
+                        "The API may be slow or unresponsive. Please try again later."
+                    )
+            
+            # Check if it's a rate limit or capacity error (503)
+            elif '429' in str(e) or '503' in str(e) or 'rate_limit' in error_str or 'rate limit' in error_str or 'over capacity' in error_str or 'over_capacity' in error_str:
+                # Check if error mentions exponential backoff
+                if 'back off exponentially' in error_str:
+                    # Use exponential backoff as suggested by API
+                    wait_time = min(2 ** attempt, 60)  # Cap at 60 seconds for capacity issues
+                    time.sleep(wait_time)
+                else:
+                    # Parse wait time from error message if available
+                    wait_time_match = re.search(r'please try again in ([\d.]+)s', error_str)
+                    if wait_time_match:
+                        wait_time = float(wait_time_match.group(1)) + 0.5  # Add 0.5s buffer
+                        time.sleep(wait_time)
+                    else:
+                        # Exponential backoff if no wait time specified
+                        wait_time = min(2 ** attempt, 30)  # Cap at 30 seconds
+                        time.sleep(wait_time)
+                continue  # Retry
+            else:
+                # Not a retryable error, re-raise immediately
+                raise
+    
+    # If we've exhausted retries, raise the last exception
+    if 'response' not in locals():
+        raise last_exception if last_exception else Exception("Failed to get LLM response")
+    
+    # Extract contexts with metadata
+    contexts = []
+    for doc in retrieved_docs:
+        context_dict = {
+            "content": doc.page_content
+        }
+        
+        # Extract source filename
+        if doc.metadata and "source" in doc.metadata:
+            source_path = doc.metadata["source"]
+            context_dict["source"] = source_path.split("/")[-1] if "/" in source_path else source_path
+        else:
+            context_dict["source"] = "Unknown source"
+        
+        # Extract page number if available
+        if doc.metadata and "page" in doc.metadata:
+            context_dict["page"] = doc.metadata["page"]
+        else:
+            context_dict["page"] = None
+        
+        # Extract chunk_id if available
+        if doc.metadata and "id" in doc.metadata:
+            context_dict["chunk_id"] = doc.metadata["id"]
+        elif hasattr(doc, "id"):
+            context_dict["chunk_id"] = doc.id
+        else:
+            context_dict["chunk_id"] = None
+        
+        contexts.append(context_dict)
+    
+    # Sanitize citations: keep only [Source: filename] where filename in allowed set
+    answer_text = response.content
+    try:
+        pattern = _re.compile(r"\[Source:\s*([^\]]+)\]")
+        def _keep_allowed(match):
+            fname = match.group(1).strip()
+            return match.group(0) if fname in allowed_sources_set else ""
+        answer_text = pattern.sub(_keep_allowed, answer_text)
+        # Collapse double spaces from removed tags
+        answer_text = _re.sub(r"\s{2,}", " ", answer_text).strip()
+    except Exception:
+        # If post-processing fails, return original content
+        answer_text = response.content
+
+    return {
+        "answer": answer_text,
+        "contexts": contexts
+    }
 
 
 # === FUNCTION 2: Add PDF to DB ===
