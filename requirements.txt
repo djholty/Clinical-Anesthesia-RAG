@@ -35,6 +35,7 @@ markitdown
 fastapi
 uvicorn
 python-multipart
+slowapi
 streamlit
 plotly
 rank_bm25

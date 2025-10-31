@@ -67,7 +67,8 @@ def test_ask_endpoint_api_key_error(monkeypatch, test_client):
     
     resp = test_client.post("/ask", json={"question": "What is anesthesia?"})
     assert resp.status_code == 401
-    assert "API key" in resp.json()["detail"]
+    # Updated: Generic error messages don't expose API key details for security
+    assert "authentication" in resp.json()["detail"].lower() or "failed" in resp.json()["detail"].lower()
 
 
 def test_ask_endpoint_timeout_error(monkeypatch, test_client):
@@ -109,7 +110,8 @@ def test_ask_endpoint_over_capacity_error(monkeypatch, test_client):
     
     resp = test_client.post("/ask", json={"question": "What is anesthesia?"})
     assert resp.status_code == 503
-    assert "capacity" in resp.json()["detail"].lower()
+    # Updated: Generic error message doesn't expose capacity details
+    assert "unavailable" in resp.json()["detail"].lower() or "try again" in resp.json()["detail"].lower()
 
 
 def test_ask_endpoint_generic_error(monkeypatch, test_client):
@@ -123,7 +125,8 @@ def test_ask_endpoint_generic_error(monkeypatch, test_client):
     
     resp = test_client.post("/ask", json={"question": "What is anesthesia?"})
     assert resp.status_code == 500
-    assert "Error processing question" in resp.json()["detail"]
+    # Updated: Generic error message doesn't expose internal details
+    assert "error occurred" in resp.json()["detail"].lower() or "try again" in resp.json()["detail"].lower()
 
 
 def test_monitoring_latest_endpoint(monkeypatch, test_client):

@@ -19,8 +19,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Initialize embedding model for semantic similarity (using same as RAG pipeline)
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 try:
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL)
 except Exception as e:
     print(f"Warning: Could not load embedding model: {e}")
     embedding_model = None

@@ -63,11 +63,59 @@ if page == "💬 Ask Questions":
         else:
             with st.spinner("Retrieving answer..."):
                 try:
+                    # Debug: Show API URL being called
+                    if st.session_state.get("debug_mode", False):
+                        st.caption(f"🔍 Calling API: {API_URL}/ask")
+                    
                     response = requests.post(f"{API_URL}/ask", json={"question": question}, timeout=30)
+                    
+                    # Debug: Show response status
+                    if st.session_state.get("debug_mode", False):
+                        st.caption(f"🔍 Response status: {response.status_code}")
+                    
                     if response.status_code == 200:
-                        answer = response.json()["answer"]
+                        result = response.json()
+                        answer = result.get("answer", "No answer provided")
+                        contexts = result.get("contexts", [])
+                        
                         st.markdown("### Answer")
                         st.info(answer)
+                        
+                        # Show contexts if available
+                        if contexts:
+                            st.markdown("---")
+                            st.markdown(f"### 📚 Sources ({len(contexts)} sources)")
+                            
+                            for idx, ctx in enumerate(contexts, 1):
+                                source = ctx.get("source", "Unknown")
+                                content = ctx.get("content", "")
+                                
+                                # Extract just the filename from full path if present
+                                if "/" in source:
+                                    source_filename = source.split("/")[-1]
+                                else:
+                                    source_filename = source
+                                
+                                # Use expander for each source to keep it organized and compact
+                                with st.expander(f"📄 Source {idx}: {source_filename}", expanded=False):
+                                    # Display full content in a readable, scrollable format
+                                    if content:
+                                        # Calculate appropriate height based on content length
+                                        content_lines = len(content.split('\n'))
+                                        # Show more lines for longer content, but cap at reasonable max
+                                        content_height = min(400, max(150, content_lines * 15))
+                                        
+                                        st.text_area(
+                                            "**Content Excerpt:**",
+                                            value=content.strip(),
+                                            height=content_height,
+                                            disabled=True,
+                                            key=f"source_{idx}_content",
+                                            help="Full text excerpt from this source document. Scroll to read complete content."
+                                        )
+                                        st.caption(f"📏 {len(content)} characters | {content_lines} lines")
+                                    else:
+                                        st.warning("No content available for this source")
                     elif response.status_code == 401:
                         # API key error
                         error_detail = response.json().get("detail", "Unknown API key error")
@@ -132,7 +180,7 @@ if page == "💬 Ask Questions":
                     st.info("The Groq API may be slow or unresponsive. Try again in a moment.")
                 except requests.exceptions.ConnectionError:
                     st.error("❌ Cannot connect to backend API. Make sure FastAPI server is running.")
-                    st.info("Start the server with: `uvicorn app.main:app --reload`")
+                    st.info("Start the server with: `./start_server.sh` (or see README for full command)")
                 except Exception as e:
                     st.error(f"❌ Unexpected error: {str(e)}")
                     with st.expander("Debug Details"):
@@ -147,35 +195,96 @@ elif page == "🔐 Admin":
     st.write("Monitoring and PDF upload portal")
 
     # --- Password protection ---
+    import hashlib
+    import hmac
+    import time
+    
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
     if ADMIN_PASSWORD:
         if "admin_authed" not in st.session_state:
             st.session_state["admin_authed"] = False
+            st.session_state["login_attempts"] = 0
+            st.session_state["last_login_attempt"] = 0
+        
+        # Session timeout (1 hour)
+        SESSION_TIMEOUT = 3600
+        if st.session_state.get("admin_authed") and st.session_state.get("last_activity"):
+            if time.time() - st.session_state["last_activity"] > SESSION_TIMEOUT:
+                st.session_state["admin_authed"] = False
+                st.session_state["login_attempts"] = 0
+                st.error("Session expired. Please login again.")
+        
         if not st.session_state["admin_authed"]:
+            # Rate limiting: max 5 attempts per 15 minutes
+            RATE_LIMIT_WINDOW = 900  # 15 minutes
+            MAX_ATTEMPTS = 5
+            current_time = time.time()
+            
+            # Reset attempts if window expired
+            if current_time - st.session_state["last_login_attempt"] > RATE_LIMIT_WINDOW:
+                st.session_state["login_attempts"] = 0
+            
+            if st.session_state["login_attempts"] >= MAX_ATTEMPTS:
+                time_remaining = RATE_LIMIT_WINDOW - (current_time - st.session_state["last_login_attempt"])
+                if time_remaining > 0:
+                    minutes = int(time_remaining / 60)
+                    st.error(f"Too many login attempts. Please wait {minutes} minute(s) before trying again.")
+                    st.stop()
+                else:
+                    st.session_state["login_attempts"] = 0
+            
             with st.form("admin_login_form"):
                 pw = st.text_input("Password", type="password")
                 submitted = st.form_submit_button("Login")
+            
             if submitted:
-                if pw == ADMIN_PASSWORD:
+                st.session_state["last_login_attempt"] = time.time()
+                st.session_state["login_attempts"] = st.session_state.get("login_attempts", 0) + 1
+                
+                # Use constant-time comparison to prevent timing attacks
+                # Hash both passwords and compare hashes using hmac.compare_digest
+                input_hash = hashlib.sha256(pw.encode()).hexdigest()
+                stored_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+                
+                if hmac.compare_digest(input_hash, stored_hash):
                     st.session_state["admin_authed"] = True
+                    st.session_state["login_attempts"] = 0
+                    st.session_state["last_activity"] = time.time()
                     st.success("Authenticated")
+                    st.rerun()  # Refresh to show admin content
                 else:
                     st.error("Invalid password")
+            
             if not st.session_state["admin_authed"]:
                 st.stop()
+        else:
+            # Update last activity time
+            st.session_state["last_activity"] = time.time()
 
     # --- Upload PDFs ---
     st.subheader("Upload PDFs")
     uploaded_pdf = st.file_uploader("Select a PDF to upload", type=["pdf"], accept_multiple_files=False)
     if uploaded_pdf is not None:
         try:
-            pdfs_dir = os.path.join("data", "pdfs")
-            os.makedirs(pdfs_dir, exist_ok=True)
-            dest_path = os.path.join(pdfs_dir, uploaded_pdf.name)
-            with open(dest_path, "wb") as f:
-                f.write(uploaded_pdf.getbuffer())
-            st.success(f"Saved to {dest_path}")
-            st.info("If conversion is enabled or a watcher is running, a corresponding .md will be generated in data/ingested_documents.")
+            # Import security utils
+            from app.security_utils import sanitize_filename
+            
+            # Sanitize filename to prevent path traversal
+            safe_filename = None
+            try:
+                safe_filename = sanitize_filename(uploaded_pdf.name)
+            except ValueError as e:
+                st.error(f"Invalid filename: {str(e)}")
+            
+            # Only proceed with upload if filename validation passed
+            if safe_filename:
+                pdfs_dir = os.path.join("data", "pdfs")
+                os.makedirs(pdfs_dir, exist_ok=True)
+                dest_path = os.path.join(pdfs_dir, safe_filename)
+                with open(dest_path, "wb") as f:
+                    f.write(uploaded_pdf.getbuffer())
+                st.success(f"Saved to {dest_path}")
+                st.info("If conversion is enabled or a watcher is running, a corresponding .md will be generated in data/ingested_documents.")
         except Exception as e:
             st.error(f"Upload failed: {e}")
 
@@ -204,7 +313,7 @@ elif page == "🔐 Admin":
             **To start the server:**
             1. Open a new terminal window
             2. Navigate to the project directory
-            3. Run: `uvicorn app.main:app --reload`
+            3. Run: `./start_server.sh` (or `uvicorn app.main:app --reload --reload-exclude '.venv/*'`)
             4. You should see: `INFO: Uvicorn running on http://127.0.0.1:8000`
             5. Refresh this page
             """)
@@ -322,14 +431,14 @@ elif page == "🔐 Admin":
                 st.error("⚠️ Request timed out after 30 seconds.")
                 st.info("💡 **Troubleshooting:**")
                 st.markdown("""
-                - Make sure the FastAPI server is running: `uvicorn app.main:app --reload`
+                - Make sure the FastAPI server is running: `./start_server.sh`
                 - Check server logs for errors
                 - Verify the server is accessible at: `http://127.0.0.1:8000`
                 - Try refreshing the page and checking the server terminal for error messages
                 """)
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot connect to backend API. Make sure FastAPI server is running.")
-                st.info("💡 **How to start the server:**\n```bash\nuvicorn app.main:app --reload\n```")
+                st.info("💡 **How to start the server:**\n```bash\n./start_server.sh\n```")
             except Exception as e:
                 st.error(f"Failed to trigger evaluation: {e}")
                 with st.expander("Debug Details"):
@@ -392,7 +501,7 @@ elif page == "🔐 Admin":
                     st.info("💤 No evaluation running")
         except requests.exceptions.ConnectionError:
             st.error("❌ Cannot connect to backend API. Make sure FastAPI server is running.")
-            st.info("Start the server with: `uvicorn app.main:app --reload`")
+            st.info("Start the server with: `./start_server.sh`")
         except requests.exceptions.Timeout:
             st.warning("⚠️ Request timed out. API may be busy.")
         except Exception as e:
@@ -493,7 +602,7 @@ elif page == "🔐 Admin":
     except requests.exceptions.ConnectionError:
         # Connection error - show helpful message
         st.error("❌ Cannot connect to backend API. Make sure FastAPI server is running.")
-        st.info("💡 **How to start the server:**\n```bash\nuvicorn app.main:app --reload\n```")
+        st.info("💡 **How to start the server:**\n```bash\n./start_server.sh\n```")
         data = None
     except Exception as e:
         # Other errors - log but don't stop execution

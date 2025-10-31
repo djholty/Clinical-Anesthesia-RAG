@@ -18,10 +18,12 @@ load_dotenv()
 os.environ["HF_TOKEN"] = os.getenv("HF_TOKEN")
 os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Get embedding model from environment or default to current model
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
 # Persistent DB directory (can be overridden via env DB_DIR)
-DB_DIR = os.getenv("DB_DIR", "/data/chroma_db")
+DB_DIR = os.getenv("DB_DIR", "./data/chroma_db")
 vectordb = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
 retriever = vectordb.as_retriever()
 
@@ -101,12 +103,15 @@ retrieval_chain = (
 
 
 # === FUNCTION 1: Ask question ===
+# Maximum question length constant
+MAX_QUESTION_LENGTH = 5000
+
 def query_rag(question: str):
     """
     Query the RAG pipeline with a user question.
     
     Args:
-        question (str): The user's question.
+        question (str): The user's question. Must be between 1 and 5000 characters.
         
     Returns:
         dict: Dictionary with 'answer' (str) and 'contexts' (List[dict]).
@@ -115,7 +120,19 @@ def query_rag(question: str):
               - page (int): Page number if available, else None
               - content (str): The chunk content
               - chunk_id (str): Optional chunk identifier if available
+    
+    Raises:
+        ValueError: If question is empty, too long, or invalid.
     """
+    # Validate input
+    if not question or not question.strip():
+        raise ValueError("Question cannot be empty")
+    
+    question = question.strip()
+    
+    if len(question) > MAX_QUESTION_LENGTH:
+        raise ValueError(f"Question exceeds maximum length of {MAX_QUESTION_LENGTH} characters")
+    
     # Retrieve documents first
     retrieved_docs = retriever.invoke(question)
     
@@ -247,7 +264,10 @@ def add_pdf_to_db(pdf_path: str):
     loader = PyPDFLoader(pdf_path)
     docs = loader.load()
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
+    # Get chunk size and overlap from environment or use defaults
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2000"))
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "300"))
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     chunks = text_splitter.split_documents(docs)
 
     vectordb.add_documents(chunks)

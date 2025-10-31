@@ -2,14 +2,29 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, R
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import secrets
+import logging
 from pydantic import BaseModel
 from app.rag_pipeline import query_rag, add_pdf_to_db, list_documents, delete_document
 from app.monitoring import get_latest_evaluation, get_all_evaluations, get_evaluation_by_timestamp
+from app.security_utils import sanitize_filename, MAX_UPLOAD_SIZE, validate_file_size, validate_pdf_content
 import shutil
 import os
 import sys
 from pathlib import Path
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Add monitoring directory to path to import evaluation function
 monitoring_path = Path(__file__).parent.parent / "monitoring"
@@ -19,6 +34,24 @@ from evaluate_rag import run_evaluation
 app = FastAPI(title="RAG Model API", version="1.3")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 security = HTTPBasic()
+
+# Configure CORS - allow requests from Streamlit frontend and all localhost origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+# Configure rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add rate limiter middleware for proper integration
+app.add_middleware(SlowAPIMiddleware)
 
 # Global flag to track evaluation status
 evaluation_status = {
@@ -30,11 +63,39 @@ evaluation_status = {
     "progress_percent": 0.0
 }
 
+from pydantic import Field, field_validator
+
 class QueryRequest(BaseModel):
-    question: str
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="User question to ask the RAG model"
+    )
+    
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls, v):
+        """Validate and sanitize user question."""
+        if not v:
+            raise ValueError("Question cannot be empty")
+        
+        v = v.strip()
+        
+        # Remove potential prompt injection patterns
+        # Remove excessive whitespace
+        v = ' '.join(v.split())
+        
+        if len(v) == 0:
+            raise ValueError("Question cannot be empty after sanitization")
+        
+        if len(v) > 5000:
+            raise ValueError("Question exceeds maximum length of 5000 characters")
+        
+        return v
 
 class DeleteRequest(BaseModel):
-    filename: str
+    filename: str = Field(..., min_length=1, max_length=255)
 
 
 @app.get("/")
@@ -51,71 +112,134 @@ def health_check():
     }
 
 @app.post("/ask")
-def ask_question(request: QueryRequest):
+@limiter.limit("10/minute")  # 10 requests per minute per IP
+def ask_question(request: Request, query_request: QueryRequest):
     """Ask a question to the RAG model."""
     try:
-        result = query_rag(request.question)
+        result = query_rag(query_request.question)
         return {
-            "question": request.question,
+            "question": query_request.question,
             "answer": result["answer"],
             "contexts": result["contexts"]
         }
+    except ValueError as e:
+        # User input validation errors - can expose these safely
+        logger.warning(f"Validation error in /ask: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # Log full error details internally
         error_str = str(e)
         error_lower = error_str.lower()
+        logger.error(f"Error processing question in /ask: {error_str}", exc_info=True)
         
-        # Check for API key errors
+        # Sanitize error message to prevent information disclosure
+        # Check for API key errors (don't expose details)
         if 'api_key' in error_lower or 'authentication' in error_lower or 'invalid api key' in error_lower or '401' in error_str:
             raise HTTPException(
                 status_code=401,
-                detail="API key error: Your Groq API key may be invalid, expired, or missing. Please check your GROQ_API_KEY environment variable."
+                detail="Authentication failed. Please check your API configuration."
             )
         # Check for timeout errors
         elif 'timeout' in error_lower or 'timed out' in error_lower:
             raise HTTPException(
                 status_code=504,
-                detail="Request timeout: The Groq API took too long to respond. This might indicate the API is slow or unresponsive. Please try again in a moment."
+                detail="Request timeout. Please try again in a moment."
             )
         # Check for over capacity (503)
         elif '503' in error_str or 'over capacity' in error_lower or 'over_capacity' in error_lower:
             raise HTTPException(
                 status_code=503,
-                detail="API over capacity: The Groq API is currently overloaded. Please try again later with exponential backoff. Check https://groqstatus.com for service status."
+                detail="Service temporarily unavailable. Please try again later."
             )
         # Check for rate limit / quota exceeded
         elif '429' in error_str or 'rate limit' in error_lower or 'quota' in error_lower or 'usage limit' in error_lower:
             raise HTTPException(
                 status_code=429,
-                detail="Rate limit or quota exceeded: You may have reached your API usage limit. Please check your Groq account or wait before trying again."
+                detail="Rate limit exceeded. Please wait before trying again."
             )
         # Check for other API errors
         elif 'api' in error_lower and ('error' in error_lower or 'failed' in error_lower):
             raise HTTPException(
                 status_code=502,
-                detail=f"API error: {error_str}. This might be a temporary issue with the Groq API service."
+                detail="External service error. Please try again later."
             )
         else:
-            # Re-raise as 500 with error message
+            # Generic error message - don't expose internal details
             raise HTTPException(
                 status_code=500,
-                detail=f"Error processing question: {error_str}"
+                detail="An error occurred processing your request. Please try again later."
             )
 
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
+@limiter.limit("5/minute")  # 5 uploads per minute per IP
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
     """Upload a PDF and add it to the vector database."""
-    os.makedirs("uploads", exist_ok=True)
-    file_path = f"uploads/{file.filename}"
+    # Sanitize filename to prevent path traversal
+    try:
+        safe_filename = sanitize_filename(file.filename)
+    except ValueError as e:
+        logger.warning(f"Invalid filename in upload: {file.filename}")
+        raise HTTPException(status_code=400, detail="Invalid filename provided.")
+    
+    # Check file size during upload
+    file_size = 0
+    MAX_CHUNK_SIZE = 1024 * 1024  # Read in 1 MB chunks
+    chunks = []
+    
+    # Read file in chunks to check size without loading entire file into memory
+    while True:
+        chunk = await file.read(MAX_CHUNK_SIZE)
+        if not chunk:
+            break
+        file_size += len(chunk)
+        chunks.append(chunk)
+        
+        # Check size limit incrementally
+        if file_size > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File size exceeds maximum of {MAX_UPLOAD_SIZE / (1024*1024):.0f} MB"
+            )
+    
+    uploads_dir = Path("uploads")
+    uploads_dir.mkdir(exist_ok=True)
+    file_path = uploads_dir / safe_filename
 
+    # Write chunks directly (already read and validated)
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        for chunk in chunks:
+            buffer.write(chunk)
+    
+    # Validate file is actually a PDF (content validation)
+    if not validate_pdf_content(str(file_path)):
+        # Clean up invalid file
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(
+            status_code=400,
+            detail="File is not a valid PDF. Please ensure the file is a valid PDF document."
+        )
 
-    chunks_added = add_pdf_to_db(file_path)
-    return {
-        "filename": file.filename,
-        "chunks_added": chunks_added,
-        "status": "PDF successfully processed and added to database."
-    }
+    try:
+        chunks_added = add_pdf_to_db(str(file_path))
+        return {
+            "filename": safe_filename,  # Return sanitized filename
+            "chunks_added": chunks_added,
+            "status": "PDF successfully processed and added to database."
+        }
+    except Exception as e:
+        # Log detailed error internally
+        logger.error(f"Error processing PDF in /upload: {str(e)}", exc_info=True)
+        # Clean up file if processing failed
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred processing the PDF. Please try again later."
+        )
 
 @app.get("/list_docs")
 def get_list_of_documents():
@@ -126,8 +250,25 @@ def get_list_of_documents():
 @app.delete("/delete_doc")
 def delete_file_docs(request: DeleteRequest):
     """Delete all document chunks from a specific file in Chroma."""
-    result = delete_document(request.filename)
-    return result
+    try:
+        # Sanitize filename to prevent path traversal
+        try:
+            safe_filename = sanitize_filename(request.filename)
+        except ValueError as e:
+            logger.warning(f"Invalid filename in delete_doc: {request.filename}")
+            raise HTTPException(status_code=400, detail="Invalid filename provided.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in delete_doc: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred. Please try again later.")
+    
+    try:
+        result = delete_document(safe_filename)
+        return result
+    except Exception as e:
+        logger.error(f"Error deleting document: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred deleting the document. Please try again later.")
 
 @app.get("/monitoring/latest")
 def get_latest_eval():
@@ -233,9 +374,11 @@ def run_evaluation_task():
         evaluation_status["message"] = f"Evaluation completed successfully! Average score: {avg_score:.2f}/4. Saved to {output_file.name}"
         
     except Exception as e:
+        # Log detailed error internally
+        logger.error(f"Error during evaluation: {str(e)}", exc_info=True)
         evaluation_status["is_running"] = False
         evaluation_status["status"] = "error"
-        evaluation_status["message"] = f"Error during evaluation: {str(e)}"
+        evaluation_status["message"] = "An error occurred during evaluation."  # Generic message
 
 @app.post("/monitoring/trigger_evaluation")
 def trigger_evaluation(background_tasks: BackgroundTasks):
@@ -268,13 +411,15 @@ def trigger_evaluation(background_tasks: BackgroundTasks):
             "message": "Evaluation started in background. Check status endpoint for updates."
         }
     except Exception as e:
+        # Log detailed error internally
+        logger.error(f"Failed to start evaluation: {str(e)}", exc_info=True)
         # Reset status on error
         evaluation_status["is_running"] = False
         evaluation_status["status"] = "error"
-        evaluation_status["message"] = f"Failed to start evaluation: {str(e)}"
+        evaluation_status["message"] = "Failed to start evaluation."  # Generic message
         return {
             "status": "error",
-            "message": f"Failed to start evaluation: {str(e)}"
+            "message": "Failed to start evaluation. Please try again later."  # Generic message
         }
 
 
@@ -326,18 +471,59 @@ def _maybe_convert_pdf_to_markdown(pdf_path: str):
 
 
 @app.post("/admin/upload", response_class=HTMLResponse)
+@limiter.limit("10/minute")  # 10 uploads per minute per IP (admin can upload more)
 async def admin_upload_pdf(request: Request, file: UploadFile = File(...), background_tasks: BackgroundTasks = None, _: bool = Depends(_require_admin)):
     """Upload a PDF to data/pdfs. Optionally trigger background conversion to markdown."""
     try:
-        if not file.filename.lower().endswith(".pdf"):
+        # Sanitize filename first to prevent path traversal, then check extension
+        try:
+            safe_filename = sanitize_filename(file.filename)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid filename: {str(e)}")
+        
+        # Check extension on sanitized filename
+        if not safe_filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+        # Check file size during upload
+        file_size = 0
+        MAX_CHUNK_SIZE = 1024 * 1024  # Read in 1 MB chunks
+        chunks = []
+        
+        while True:
+            chunk = await file.read(MAX_CHUNK_SIZE)
+            if not chunk:
+                break
+            file_size += len(chunk)
+            chunks.append(chunk)
+            
+            # Check size limit incrementally
+            if file_size > MAX_UPLOAD_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File size exceeds maximum of {MAX_UPLOAD_SIZE / (1024*1024):.0f} MB"
+                )
+        
+        # Reset file pointer
+        file.file.seek(0)
 
         pdfs_dir = Path("./data/pdfs")
         pdfs_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = pdfs_dir / file.filename
+        dest_path = pdfs_dir / safe_filename
 
         with open(dest_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            for chunk in chunks:
+                buffer.write(chunk)
+        
+        # Validate file is actually a PDF (content validation)
+        if not validate_pdf_content(str(dest_path)):
+            # Clean up invalid file
+            if dest_path.exists():
+                dest_path.unlink()
+            raise HTTPException(
+                status_code=400,
+                detail="File is not a valid PDF. Please ensure the file is a valid PDF document."
+            )
 
         # Optionally convert to markdown in background
         if background_tasks is not None:
@@ -349,11 +535,14 @@ async def admin_upload_pdf(request: Request, file: UploadFile = File(...), backg
             {
                 "request": request,
                 "upload_success": True,
-                "uploaded_filename": file.filename,
+                "uploaded_filename": safe_filename,  # Return sanitized filename
             },
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        # Log detailed error internally
+        logger.error(f"Error in admin upload: {str(e)}", exc_info=True)
+        # Return generic error to user
+        raise HTTPException(status_code=500, detail="An error occurred during upload. Please try again later.")
 

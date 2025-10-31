@@ -1,0 +1,7 @@
+avg_relevance,avg_chunks_retrieved,avg_context_length,avg_query_time,total_chunks_in_db,chunk_size,chunk_overlap,description,test_time,embedding_model,llm_model,composite_score
+0.637950299680233,4.0,2842.8,0.8072056293487548,4,2000,400,Default - higher overlap,11.283935785293579,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6157682969441862
+0.637950299680233,4.0,2842.8,0.8243954181671143,4,2500,400,Large chunks - good context,11.321141719818115,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6137824811620574
+0.637950299680233,4.0,2842.8,0.8818742513656617,4,3000,500,Very large chunks - high overlap,12.544813632965088,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6075011492160627
+0.637950299680233,4.0,2842.8,0.8889980316162109,4,2000,300,Default - balanced,11.968368768692017,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6067588647793373
+0.637950299680233,4.0,2842.8,0.9061547040939331,4,1500,250,Medium-small chunks,12.089262247085571,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6050020405114552
+0.637950299680233,4.0,2842.8,0.9140746831893921,4,1000,150,Small chunks - high precision,15.807493925094604,NeuML/pubmedbert-base-embeddings,llama-3.1-8b-instant,0.6042054253277807

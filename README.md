@@ -2,7 +2,9 @@
 An AI assistant for anesthesia knoweldge using retrieval-augmented generation and LLMs to answer clinical questions
 ## Admin Page
 
-- Start API: `uvicorn app.main:app --reload`
+- Start API: 
+  - **Recommended:** `./start_server.sh` (excludes .venv and other non-source files from watching)
+  - **Or manually:** `uvicorn app.main:app --reload --reload-exclude '.venv/*' --reload-exclude '__pycache__/*'`
 - Open admin: `http://127.0.0.1:8000/admin`
   - Monitor evaluation status (auto-refreshes every 2s)
   - Trigger evaluations

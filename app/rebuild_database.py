@@ -36,44 +36,159 @@ def rebuild_database(markdown_dir: str = None, db_dir: str = None):
     print("🗑️  Step 1: Removing old databases...")
     # Remove old chroma_db
     if os.path.exists(db_path):
-        shutil.rmtree(db_path)
-        print(f"   ✓ Removed {db_path}")
+        try:
+            # Try to remove, but handle locked files
+            shutil.rmtree(db_path)
+            print(f"   ✓ Removed {db_path}")
+        except PermissionError as e:
+            print(f"   ⚠️  Warning: Could not fully remove {db_path}")
+            print(f"      Error: {str(e)}")
+            print(f"      This may be because the FastAPI server is using the database.")
+            print(f"      Please stop the server (Ctrl+C in its terminal) and try again.")
+            raise
+        except OSError as e:
+            print(f"   ⚠️  Warning: Could not fully remove {db_path}")
+            print(f"      Error: {str(e)}")
+            print(f"      Trying to remove individual files...")
+            # Try to remove individual files
+            import stat
+            for root, dirs, files in os.walk(db_path):
+                for name in files:
+                    filepath = os.path.join(root, name)
+                    try:
+                        os.chmod(filepath, stat.S_IWRITE | stat.S_IREAD)
+                        os.remove(filepath)
+                    except:
+                        pass
+                for name in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, name))
+                    except:
+                        pass
+            try:
+                os.rmdir(db_path)
+                print(f"   ✓ Removed {db_path} (after cleanup)")
+            except:
+                print(f"   ❌ Could not remove {db_path}. Please stop any processes using it.")
+                raise
     
     # Remove optimized database
     if os.path.exists(OLD_DB_DIR):
-        shutil.rmtree(OLD_DB_DIR)
-        print(f"   ✓ Removed {OLD_DB_DIR}")
+        try:
+            shutil.rmtree(OLD_DB_DIR)
+            print(f"   ✓ Removed {OLD_DB_DIR}")
+        except (PermissionError, OSError) as e:
+            print(f"   ⚠️  Warning: Could not remove {OLD_DB_DIR}: {str(e)}")
+            # Non-critical, continue anyway
     
     print("\n📂 Step 2: Loading markdown files...")
     # Load all markdown files
-    loader = DirectoryLoader(
-        md_dir,
-        glob="**/*.md",
-        loader_cls=UnstructuredMarkdownLoader,
-        show_progress=True
-    )
-    documents = loader.load()
+    # Suppress "No features in text" warnings from unstructured library
+    import warnings
+    import sys
+    from io import StringIO
+    
+    # Capture stderr to filter out "No features in text" messages
+    old_stderr = sys.stderr
+    captured_output = StringIO()
+    
+    try:
+        sys.stderr = captured_output
+        loader = DirectoryLoader(
+            md_dir,
+            glob="**/*.md",
+            loader_cls=UnstructuredMarkdownLoader,
+            show_progress=True
+        )
+        documents = loader.load()
+    finally:
+        sys.stderr = old_stderr
+        # Filter out "No features in text" from captured output
+        output = captured_output.getvalue()
+        if output and "No features in text" not in output:
+            # Only print if there's actual error output (not just the "No features" warning)
+            print(output, end="", file=sys.stderr)
+    
     print(f"   ✓ Loaded {len(documents)} markdown files")
     
     print("\n✂️  Step 3: Splitting documents into chunks...")
+    # Get chunk size and overlap from environment or use defaults
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2000"))
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "300"))
+    print(f"   Using chunk_size={CHUNK_SIZE}, chunk_overlap={CHUNK_OVERLAP}")
     # Split documents
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,
-        chunk_overlap=300
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP
     )
     chunks = text_splitter.split_documents(documents)
     print(f"   ✓ Created {len(chunks)} chunks")
     
     print("\n🧠 Step 4: Creating embeddings and building database...")
+    # Get embedding model from environment or default
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    print(f"   Using embedding model: {EMBEDDING_MODEL}")
     # Create embeddings
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    
+    # Ensure database directory exists and is writable
+    db_path_obj = Path(db_path)
+    db_path_obj.mkdir(parents=True, exist_ok=True)
+    
+    # Check write permissions
+    try:
+        test_file = db_path_obj / ".test_write"
+        test_file.write_text("test")
+        test_file.unlink()
+    except Exception as e:
+        raise PermissionError(f"Database directory {db_path} is not writable: {e}")
     
     # Create new Chroma database
-    vectordb = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=db_path
-    )
+    # Use a unique temporary name first, then rename to avoid locking issues
+    import tempfile
+    # shutil is already imported at top of file
+    
+    temp_db_dir = None
+    try:
+        # Create database in a temp location first
+        temp_db_dir = tempfile.mkdtemp(prefix="chroma_temp_")
+        
+        vectordb = Chroma.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            persist_directory=temp_db_dir
+        )
+        
+        # Force persistence
+        try:
+            vectordb.persist()
+        except AttributeError:
+            # persist() might not exist in newer Chroma versions
+            pass
+        
+        # Close connection explicitly
+        try:
+            del vectordb
+        except:
+            pass
+        
+        # Small delay to ensure all files are written
+        import time
+        time.sleep(0.5)
+        
+        # Now move temp database to final location
+        if os.path.exists(db_path):
+            shutil.rmtree(db_path)
+        shutil.move(temp_db_dir, db_path)
+        
+    except Exception as e:
+        # Clean up temp directory on error
+        if temp_db_dir and os.path.exists(temp_db_dir):
+            try:
+                shutil.rmtree(temp_db_dir)
+            except:
+                pass
+        raise
     
     print(f"   ✓ Database created at {db_path}")
     print(f"\n✅ Database rebuild complete!")

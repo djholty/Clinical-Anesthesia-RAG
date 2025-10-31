@@ -1,0 +1,19 @@
+[server]
+# Configure server settings
+port = 8501
+address = "127.0.0.1"
+
+# Enable CORS for static files
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+# Automatically open browser on startup
+gatherUsageStats = false
+
+[theme]
+# Streamlit theme settings (optional)
+# primaryColor = "#FF4B4B"
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F0F2F6"
+
