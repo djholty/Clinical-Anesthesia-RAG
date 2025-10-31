@@ -10,6 +10,8 @@ services:
     volumes:
       - '${PWD}/data/ingested_documents:/app/data/ingested_documents'
       - '${PWD}/data/chroma_db:/app/data/chroma_db'
+      - '${PWD}/data/pdfs:/app/data/pdfs'
+      - '${PWD}/uploads:/app/uploads'
 
   frontend:
     build:

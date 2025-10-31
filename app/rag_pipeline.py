@@ -15,12 +15,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === Initialize components ===
-os.environ["HF_TOKEN"] = os.getenv("HF_TOKEN")
-os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
+hf_token = os.getenv("HF_TOKEN")
+groq_api_key = os.getenv("GROQ_API_KEY")
+
+# Set environment variables for libraries that need them
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
+if groq_api_key:
+    os.environ["GROQ_API_KEY"] = groq_api_key
 
 # Get embedding model from environment or default to current model
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+# Strip quotes in case user added them in .env file
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip().strip("'\"")
+# Initialize embeddings
+# HuggingFaceEmbeddings will automatically use HF_TOKEN from environment if needed
+# Public models like all-MiniLM-L6-v2 don't require a token
+# Gated models (e.g., NeuML/pubmedbert-base-embeddings) require HF_TOKEN to be set
+try:
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+except Exception as e:
+    error_msg = str(e).lower()
+    # Check for authentication errors
+    if "401" in error_msg or "unauthorized" in error_msg or "authentication" in error_msg:
+        raise ValueError(
+            f"Authentication failed for model '{EMBEDDING_MODEL}'. "
+            "This model requires a valid HF_TOKEN. "
+            "Please set HF_TOKEN in your .env file with a valid HuggingFace token. "
+            "Get your token at: https://huggingface.co/settings/tokens\n"
+            f"Original error: {str(e)}"
+        )
+    # Re-raise other errors as-is
+    raise
 
 # Persistent DB directory (can be overridden via env DB_DIR)
 DB_DIR = os.getenv("DB_DIR", "./data/chroma_db")

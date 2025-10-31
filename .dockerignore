@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+tests/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.bak
+
+# Data directories (mounted as volumes, don't copy into image)
+data/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+uploads/
+tmp/
+temp/
+*.tmp
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Monitoring test results
+monitoring/chunk_config_tests/
+monitoring/evaluations/
+
+# Work files
+david_work_files/
+
+# CI/CD
+.github/
+
+# Scripts
+start_server.sh
+*.sh
+

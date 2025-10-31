@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY app_main.py ./app_main.py
 COPY templates ./templates
 
+# Copy Streamlit configuration directory if it exists
+COPY .streamlit ./.streamlit
+
 # Install Streamlit and requests (for API calls)
 # (Dependencies installed above)
 

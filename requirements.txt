@@ -27,6 +27,7 @@ SQLAlchemy
 validators==0.28.1
 youtube_transcript_api
 unstructured
+markdown
 pytube
 numexpr
 huggingface_hub

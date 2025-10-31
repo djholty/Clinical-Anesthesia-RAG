@@ -14,7 +14,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up HuggingFace token
-os.environ["HF_TOKEN"] = os.getenv("HF_TOKEN")
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
 
 # Paths - can be overridden by environment variables
 MARKDOWN_DIR = os.getenv("MARKDOWN_DIR", "./data/ingested_documents")
@@ -126,10 +128,30 @@ def rebuild_database(markdown_dir: str = None, db_dir: str = None):
     
     print("\n🧠 Step 4: Creating embeddings and building database...")
     # Get embedding model from environment or default
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    # Strip quotes in case user added them in .env file
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip().strip("'\"")
     print(f"   Using embedding model: {EMBEDDING_MODEL}")
-    # Create embeddings
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    # HuggingFaceEmbeddings will automatically use HF_TOKEN from environment if needed
+    if hf_token:
+        print("   HF_TOKEN is set (will be used if model requires authentication)")
+    
+    try:
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check for authentication errors
+        if "401" in error_msg or "unauthorized" in error_msg or "authentication" in error_msg:
+            print(f"\n❌ Error: Authentication failed for model '{EMBEDDING_MODEL}'")
+            print("   This model requires a valid HF_TOKEN.")
+            print("   Please set HF_TOKEN in your .env file with a valid HuggingFace token.")
+            print("   Get your token at: https://huggingface.co/settings/tokens")
+            raise ValueError(
+                f"Authentication failed for model '{EMBEDDING_MODEL}'. "
+                "This model requires a valid HF_TOKEN. "
+                "Please set HF_TOKEN in your .env file."
+            )
+        # Re-raise other errors as-is
+        raise
     
     # Ensure database directory exists and is writable
     db_path_obj = Path(db_path)
