@@ -564,7 +564,7 @@ elif page == "🔐 Admin":
     st.divider()
     
     # Tabs for different views
-    tab1, tab2, tab3 = st.tabs(["📈 Overview", "📋 Detailed Results", "📊 Historical Trends"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📋 Detailed Results", "📊 Historical Trends", "✍️ Manual Assessment"])
     
     # Fetch all available evaluations for selection
     all_evaluations = []
@@ -620,18 +620,18 @@ elif page == "🔐 Admin":
         # Metrics Explanation Section
         with st.expander("📖 How Evaluation Metrics Are Calculated", expanded=False):
                     st.markdown("""
-                    ### Correctness Score (Overall Accuracy)
+                    ### Correctness Score (Accuracy)
                     **How it's calculated:** An LLM evaluator compares the RAG model's answer to the expected answer, scoring on a 1-4 scale:
                     - **4 (Excellent):** Fully correct and complete
                     - **3 (Good):** Mostly correct with minor omissions
                     - **2 (Fair):** Partially correct but missing key information
                     - **1 (Poor):** Mostly or completely incorrect
                     
-                    The average across all questions gives the Overall Accuracy score.
+                    The average across all questions gives the Accuracy score.
                     """)
                     
                     st.markdown("""
-                    ### Citation Quality Score
+                    ### Citation Score
                     **How it's calculated:** A hybrid approach combining automated metrics (60%) and LLM evaluation (40%):
                     
                     **Automated Metrics:**
@@ -644,23 +644,25 @@ elif page == "🔐 Admin":
                     These are combined into a final 1-4 score (same scale as Correctness).
                     """)
         
-        # Metrics row - Expand to include citation scores if available
+        # Metrics row - Show Accuracy, Citation Score, and Good+Excellent percentages
         if 'average_citation_score' in data:
-            col1, col2, col3, col4, col5 = st.columns(5)
-        else:
             col1, col2, col3, col4 = st.columns(4)
+        else:
+            col1, col2, col3 = st.columns(3)
+        
+        st.subheader("🤖 Automated Evaluation")
         
         with col1:
             st.metric(
-                "Overall Accuracy", 
+                "Accuracy", 
                 f"{data['average_score']:.2f}/4",
-                help="Average correctness score across all questions (out of 4)"
+                help="Average correctness score from automated evaluation (out of 4)"
             )
         
         with col2:
             if 'average_citation_score' in data:
                 st.metric(
-                    "Citation Quality", 
+                    "Citation Score", 
                     f"{data['average_citation_score']:.2f}/4",
                     help="Average citation relevance score (out of 4)"
                 )
@@ -672,96 +674,258 @@ elif page == "🔐 Admin":
                 )
         
         with col3:
-            if 'average_citation_score' in data:
-                st.metric(
-                    "Total Questions", 
-                    data['total_questions'],
-                    help="Number of questions evaluated"
-                )
-            else:
-                excellent_pct = (data['score_distribution']['excellent'] / data['total_questions']) * 100
-                st.metric(
-                    "Excellent Answers", 
-                    f"{excellent_pct:.1f}%",
-                    help="Answers scoring 4 (excellent)"
-                )
-        
-        with col4:
-            excellent_pct = (data['score_distribution']['excellent'] / data['total_questions']) * 100
+            # Accuracy: Good+Excellent %
+            good_excellent_count = data['score_distribution']['excellent'] + data['score_distribution']['good']
+            accuracy_good_excellent_pct = (good_excellent_count / data['total_questions']) * 100
             st.metric(
-                "Excellent Answers", 
-                f"{excellent_pct:.1f}%",
-                help="Answers scoring 4 (excellent)"
+                "Accuracy: Good+Excellent", 
+                f"{accuracy_good_excellent_pct:.1f}%",
+                help="Percentage of answers scoring 3 (Good) or 4 (Excellent)"
             )
         
-        # col5 only exists when citation scores are available
+        # col4 only exists when citation scores are available
         if 'average_citation_score' in data:
-            with col5:
-                cit_excellent_pct = (data.get('citation_score_distribution', {}).get('excellent', 0) / data['total_questions']) * 100
+            with col4:
+                # Citation Score: Good+Excellent %
+                cit_dist = data.get('citation_score_distribution', {})
+                cit_good_excellent_count = cit_dist.get('excellent', 0) + cit_dist.get('good', 0)
+                cit_good_excellent_pct = (cit_good_excellent_count / data['total_questions']) * 100
                 st.metric(
-                    "Excellent Citations", 
-                    f"{cit_excellent_pct:.1f}%",
-                    help="Citation scores of 4 (excellent)"
+                    "Citation Score: Good+Excellent", 
+                    f"{cit_good_excellent_pct:.1f}%",
+                    help="Percentage of citations scoring 3 (Good) or 4 (Excellent)"
                 )
         
-        # Poor answers metric
-        if 'average_citation_score' not in data:
-            poor_pct = (data['score_distribution']['poor'] / data['total_questions']) * 100
-            st.metric(
-                "Poor Answers", 
-                f"{poor_pct:.1f}%",
-                help="Answers scoring 1 (poor)",
-                delta=f"-{poor_pct:.1f}%" if poor_pct > 0 else None,
-                delta_color="inverse"
-            )
+        # Manual Assessment Metrics Section
+        # Fetch latest manual assessment
+        manual_data_overview = None
+        try:
+            manual_response = requests.get(f"{API_URL}/monitoring/manual_assessment/latest", timeout=10)
+            if manual_response.status_code == 200:
+                manual_data_overview = manual_response.json()
+                if 'error' in manual_data_overview:
+                    manual_data_overview = None
+        except Exception:
+            manual_data_overview = None
+        
+        if manual_data_overview:
+            # Display manual assessment metrics in same format as automated
+            if 'average_citation_score' in manual_data_overview:
+                manual_col1, manual_col2, manual_col3, manual_col4 = st.columns(4)
+            else:
+                manual_col1, manual_col2, manual_col3 = st.columns(3)
+            
+            with manual_col1:
+                st.metric(
+                    "Accuracy", 
+                    f"{manual_data_overview['average_score']:.2f}/4",
+                    help="Average correctness score from manual assessment (out of 4)"
+                )
+            
+            with manual_col2:
+                if 'average_citation_score' in manual_data_overview:
+                    st.metric(
+                        "Citation Score", 
+                        f"{manual_data_overview['average_citation_score']:.2f}/4",
+                        help="Average citation relevance score from manual assessment (out of 4)"
+                    )
+                else:
+                    st.metric(
+                        "Total Questions", 
+                        manual_data_overview['total_questions'],
+                        help="Number of questions in manual assessment"
+                    )
+            
+            with manual_col3:
+                # Accuracy: Good+Excellent %
+                manual_good_excellent_count = manual_data_overview['score_distribution']['excellent'] + manual_data_overview['score_distribution']['good']
+                manual_accuracy_good_excellent_pct = (manual_good_excellent_count / manual_data_overview['total_questions']) * 100
+                st.metric(
+                    "Accuracy: Good+Excellent", 
+                    f"{manual_accuracy_good_excellent_pct:.1f}%",
+                    help="Percentage of answers scoring 3 (Good) or 4 (Excellent) in manual assessment"
+                )
+            
+            # col4 only exists when citation scores are available
+            if 'average_citation_score' in manual_data_overview:
+                with manual_col4:
+                    # Citation Score: Good+Excellent %
+                    manual_cit_dist = manual_data_overview.get('citation_score_distribution', {})
+                    manual_cit_good_excellent_count = manual_cit_dist.get('excellent', 0) + manual_cit_dist.get('good', 0)
+                    manual_cit_good_excellent_pct = (manual_cit_good_excellent_count / manual_data_overview['total_questions']) * 100
+                    st.metric(
+                        "Citation Score: Good+Excellent", 
+                        f"{manual_cit_good_excellent_pct:.1f}%",
+                        help="Percentage of citations scoring 3 (Good) or 4 (Excellent) in manual assessment"
+                    )
+            
+            st.subheader("📋 Manual Assessment")
+        else:
+            st.subheader("📋 Manual Assessment")
+            st.info("No manual assessment available yet. Create one in the Manual Assessment tab.")
         
         st.divider()
         
-        # Score distribution chart - show both correctness and citation if available
+        # Fetch latest manual assessment for bar graphs
+        manual_data_for_charts = None
+        try:
+            manual_response = requests.get(f"{API_URL}/monitoring/manual_assessment/latest", timeout=10)
+            if manual_response.status_code == 200:
+                manual_data_for_charts = manual_response.json()
+                if 'error' in manual_data_for_charts:
+                    manual_data_for_charts = None
+        except Exception:
+            manual_data_for_charts = None
+        
+        # Score distribution chart - show bar graphs for correctness and citation if available
         if 'average_citation_score' in data:
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Accuracy Score Distribution")
+                scores = [r['score'] for r in data['results']]
+                # Count occurrences of each score (1, 2, 3, 4) for automated
+                score_counts = pd.Series(scores).value_counts().sort_index()
+                score_counts = score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                
+                # Get manual assessment scores if available
+                manual_scores = []
+                if manual_data_for_charts and 'results' in manual_data_for_charts:
+                    manual_scores = [r.get('score', 0) for r in manual_data_for_charts['results'] if 'score' in r and pd.notna(r.get('score'))]
+                
+                manual_score_counts = pd.Series(manual_scores).value_counts().sort_index() if manual_scores else pd.Series([], dtype=int)
+                manual_score_counts = manual_score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                
+                # Calculate totals for percentage calculation
+                total_automated = len(scores) if scores else 1  # Avoid division by zero
+                total_manual = len(manual_scores) if manual_scores else 1  # Avoid division by zero
+                
+                # Convert counts to percentages
+                score_percentages = (score_counts.values / total_automated) * 100 if total_automated > 0 else [0, 0, 0, 0]
+                manual_score_percentages = (manual_score_counts.values / total_manual) * 100 if total_manual > 0 else [0, 0, 0, 0]
+                
+                # Create grouped bar chart
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=[1, 2, 3, 4],
+                    y=score_percentages,
+                    name='Automated Assessment',
+                    marker_color='#636EFA'
+                ))
+                fig.add_trace(go.Bar(
+                    x=[1, 2, 3, 4],
+                    y=manual_score_percentages,
+                    name='Manual Assessment',
+                    marker_color='#00CC96'
+                ))
+                fig.update_xaxes(dtick=1, tickmode='linear', title='Score')
+                fig.update_yaxes(title='Percentage (%)', range=[0, 100], tickformat='.0f', ticksuffix='%')
+                fig.update_layout(
+                    height=400,
+                    barmode='group',
+                    showlegend=True,
+                    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.subheader("Citation Score Distribution")
+                cit_scores = [r.get('citation_score', 0) for r in data['results'] if 'citation_score' in r and pd.notna(r.get('citation_score'))]
+                if cit_scores:
+                    # Count occurrences of each score (1, 2, 3, 4) for automated
+                    cit_score_counts = pd.Series(cit_scores).value_counts().sort_index()
+                    cit_score_counts = cit_score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                    
+                    # Get manual assessment citation scores if available
+                    manual_cit_scores = []
+                    if manual_data_for_charts and 'results' in manual_data_for_charts:
+                        manual_cit_scores = [r.get('citation_score', 0) for r in manual_data_for_charts['results'] if 'citation_score' in r and pd.notna(r.get('citation_score'))]
+                    
+                    manual_cit_score_counts = pd.Series(manual_cit_scores).value_counts().sort_index() if manual_cit_scores else pd.Series([], dtype=int)
+                    manual_cit_score_counts = manual_cit_score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                    
+                    # Calculate totals for percentage calculation
+                    total_automated_cit = len(cit_scores) if cit_scores else 1  # Avoid division by zero
+                    total_manual_cit = len(manual_cit_scores) if manual_cit_scores else 1  # Avoid division by zero
+                    
+                    # Convert counts to percentages
+                    cit_score_percentages = (cit_score_counts.values / total_automated_cit) * 100 if total_automated_cit > 0 else [0, 0, 0, 0]
+                    manual_cit_score_percentages = (manual_cit_score_counts.values / total_manual_cit) * 100 if total_manual_cit > 0 else [0, 0, 0, 0]
+                    
+                    # Create grouped bar chart
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        x=[1, 2, 3, 4],
+                        y=cit_score_percentages,
+                        name='Automated Assessment',
+                        marker_color='#636EFA'
+                    ))
+                    fig.add_trace(go.Bar(
+                        x=[1, 2, 3, 4],
+                        y=manual_cit_score_percentages,
+                        name='Manual Assessment',
+                        marker_color='#00CC96'
+                    ))
+                    fig.update_xaxes(dtick=1, tickmode='linear', title='Score')
+                    fig.update_yaxes(title='Percentage (%)', range=[0, 100], tickformat='.0f', ticksuffix='%')
+                    fig.update_layout(
+                        height=400,
+                        barmode='group',
+                        showlegend=True,
+                        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No citation scores available")
         else:
             col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Score Distribution")
-            dist_data = data['score_distribution']
-            fig = go.Figure(data=[go.Pie(
-                labels=['Excellent (4)', 'Good (3)', 'Fair (2)', 'Poor (1)'],
-                values=[dist_data['excellent'], dist_data['good'], dist_data['fair'], dist_data['poor']],
-                marker=dict(colors=['#00CC96', '#636EFA', '#FFA15A', '#EF553B']),
-                hole=0.4
-            )])
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.subheader("Correctness Score Histogram")
-            scores = [r['score'] for r in data['results']]
-            fig = px.histogram(
-                x=scores, 
-                nbins=20,
-                labels={'x': 'Score', 'y': 'Count'},
-                color_discrete_sequence=['#636EFA']
-            )
-            fig.update_layout(height=400, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Citation score chart if available
-        if 'average_citation_score' in data:
-            with col3:
-                st.subheader("Citation Score Distribution")
-                if 'citation_score_distribution' in data:
-                    cit_dist_data = data['citation_score_distribution']
-                    fig = go.Figure(data=[go.Pie(
-                        labels=['Excellent (4)', 'Good (3)', 'Fair (2)', 'Poor (1)'],
-                        values=[cit_dist_data['excellent'], cit_dist_data['good'], 
-                               cit_dist_data['fair'], cit_dist_data['poor']],
-                        marker=dict(colors=['#00CC96', '#636EFA', '#FFA15A', '#EF553B']),
-                        hole=0.4
-                    )])
-                    fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
+            
+            with col1:
+                st.subheader("Accuracy Score Distribution")
+                scores = [r['score'] for r in data['results']]
+                # Count occurrences of each score (1, 2, 3, 4) for automated
+                score_counts = pd.Series(scores).value_counts().sort_index()
+                score_counts = score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                
+                # Get manual assessment scores if available
+                manual_scores = []
+                if manual_data_for_charts and 'results' in manual_data_for_charts:
+                    manual_scores = [r.get('score', 0) for r in manual_data_for_charts['results'] if 'score' in r and pd.notna(r.get('score'))]
+                
+                manual_score_counts = pd.Series(manual_scores).value_counts().sort_index() if manual_scores else pd.Series([], dtype=int)
+                manual_score_counts = manual_score_counts.reindex([1, 2, 3, 4], fill_value=0)
+                
+                # Calculate totals for percentage calculation
+                total_automated = len(scores) if scores else 1  # Avoid division by zero
+                total_manual = len(manual_scores) if manual_scores else 1  # Avoid division by zero
+                
+                # Convert counts to percentages
+                score_percentages = (score_counts.values / total_automated) * 100 if total_automated > 0 else [0, 0, 0, 0]
+                manual_score_percentages = (manual_score_counts.values / total_manual) * 100 if total_manual > 0 else [0, 0, 0, 0]
+                
+                # Create grouped bar chart
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=[1, 2, 3, 4],
+                    y=score_percentages,
+                    name='Automated Assessment',
+                    marker_color='#636EFA'
+                ))
+                fig.add_trace(go.Bar(
+                    x=[1, 2, 3, 4],
+                    y=manual_score_percentages,
+                    name='Manual Assessment',
+                    marker_color='#00CC96'
+                ))
+                fig.update_xaxes(dtick=1, tickmode='linear', title='Score')
+                fig.update_yaxes(title='Percentage (%)', range=[0, 100], tickformat='.0f', ticksuffix='%')
+                fig.update_layout(
+                    height=400,
+                    barmode='group',
+                    showlegend=True,
+                    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+                )
+                st.plotly_chart(fig, use_container_width=True)
         
         # Citation sub-metrics visualization removed - keeping only citation_score and correctness
         if False:  # 'average_citation_score' in data:
@@ -893,7 +1057,7 @@ elif page == "🔐 Admin":
                 st.error(f"**Score: {row['score']}/4**")
                 st.write(f"Q: {row['question'][:100]}...")
                 st.write("")
-            
+        
     # Tab 2: Detailed Results
     with tab2:
         st.header("Detailed Question-by-Question Results")
@@ -1054,6 +1218,40 @@ elif page == "🔐 Admin":
                     st.markdown("**Expected Sources (Ground Truth):**")
                     st.info(str(row['ground_truth_sources']))
                 
+                # Show retrieved chunks from vector database
+                contexts = row.get('contexts', [])
+                if contexts:
+                    # Handle contexts if they're JSON strings
+                    if isinstance(contexts, str):
+                        try:
+                            import json
+                            contexts = json.loads(contexts)
+                        except:
+                            contexts = []
+                    
+                    if contexts and len(contexts) > 0:
+                        st.markdown("**Retrieved Chunks from Vector Database:**")
+                        st.caption(f"Retrieved {len(contexts)} chunks (default: 4 chunks, ~2000 characters each)")
+                        
+                        for chunk_idx, context in enumerate(contexts, 1):
+                            source = context.get('source', 'Unknown source')
+                            page = context.get('page', 'N/A')
+                            content = context.get('content', '')
+                            char_count = len(content) if content else 0
+                            
+                            chunk_title = f"Chunk {chunk_idx}: {source}"
+                            if page and page != 'N/A' and pd.notna(page):
+                                chunk_title += f" (Page {page})"
+                            chunk_title += f" ({char_count} chars)"
+                            
+                            with st.expander(chunk_title, expanded=False):
+                                st.markdown(f"**Source:** {source}")
+                                if page and page != 'N/A' and pd.notna(page):
+                                    st.markdown(f"**Page:** {page}")
+                                st.markdown(f"**Character Count:** {char_count}")
+                                st.markdown("**Content:**")
+                                st.text_area("", content, height=200, disabled=True, key=f"chunk_{idx}_{chunk_idx}")
+                
                 st.markdown("**Correctness Evaluation Reasoning:**")
                 st.info(row['reasoning'])
                 
@@ -1065,44 +1263,284 @@ elif page == "🔐 Admin":
     with tab3:
         st.header("Historical Performance Trends")
         
-        # Fetch all evaluations
+        # Fetch all evaluations and manual assessments
         try:
             all_evals_response = requests.get(f"{API_URL}/monitoring/all", timeout=10)
+            all_evals = []
             if all_evals_response.status_code == 200:
                 all_evals = all_evals_response.json()['evaluations']
-                
-                if len(all_evals) > 1:
-                    # Create trend chart
-                    df_trends = pd.DataFrame(all_evals)
-                    # Parse timestamp format: YYYYMMDD_HHMMSS
-                    df_trends['timestamp'] = pd.to_datetime(df_trends['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
-                    df_trends = df_trends.sort_values('timestamp')
-                    
-                    fig = px.line(
-                        df_trends, 
-                        x='timestamp', 
-                        y='average_score',
-                        markers=True,
-                        title='Accuracy Over Time',
-                        labels={'average_score': 'Average Score (/4)', 'timestamp': 'Date'}
-                    )
-                    fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Show table of all evaluations
-                    st.subheader("All Evaluation Runs")
-                    st.dataframe(
-                        df_trends[['timestamp', 'total_questions', 'average_score']].rename(columns={
-                            'timestamp': 'Date',
-                            'total_questions': 'Questions',
-                            'average_score': 'Avg Score (/4)'
-                        }),
-                        use_container_width=True
-                    )
+            
+            # Fetch manual assessments
+            manual_assessments = []
+            try:
+                manual_response = requests.get(f"{API_URL}/monitoring/manual_assessments", timeout=10)
+                if manual_response.status_code == 200:
+                    response_data = manual_response.json()
+                    manual_assessments = response_data.get('assessments', [])
+                elif manual_response.status_code == 404:
+                    # No manual assessments found - this is expected if none exist
+                    manual_assessments = []
                 else:
-                    st.info("Run multiple evaluations over time to see trends. Currently showing only one evaluation.")
-                    st.write("To run a new evaluation: `python monitoring/evaluate_rag.py`")
+                    st.warning(f"Error fetching manual assessments: Status {manual_response.status_code}")
+            except requests.exceptions.RequestException as e:
+                st.warning(f"Could not fetch manual assessments: {str(e)}")
+            except Exception as e:
+                st.warning(f"Unexpected error fetching manual assessments: {str(e)}")
+            
+            # Combine evaluations and manual assessments
+            all_data = []
+            for eval_data in all_evals:
+                # Validate required fields for automated evaluations
+                if 'timestamp' in eval_data and 'average_score' in eval_data:
+                    eval_data['assessment_type'] = 'automated'
+                    all_data.append(eval_data)
+            
+            for manual_data in manual_assessments:
+                # Validate required fields for manual assessments
+                if 'timestamp' in manual_data and 'average_score' in manual_data:
+                    # Ensure timestamp is a string in YYYYMMDD_HHMMSS format
+                    if isinstance(manual_data['timestamp'], str):
+                        manual_data['assessment_type'] = 'manual'
+                        all_data.append(manual_data)
+                    else:
+                        # Try to convert timestamp if it's not a string
+                        try:
+                            manual_data['timestamp'] = str(manual_data['timestamp'])
+                            manual_data['assessment_type'] = 'manual'
+                            all_data.append(manual_data)
+                        except Exception:
+                            # Skip invalid manual assessment data
+                            continue
+                else:
+                    # Log missing fields but don't show error to user
+                    continue
+            
+            if len(all_data) > 0:
+                # Create trend chart
+                df_trends = pd.DataFrame(all_data)
+                # Parse timestamp format: YYYYMMDD_HHMMSS
+                df_trends['timestamp'] = pd.to_datetime(df_trends['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
+                # Drop rows where timestamp parsing failed
+                df_trends = df_trends.dropna(subset=['timestamp'])
+                df_trends = df_trends.sort_values('timestamp')
+                
+                # Separate automated and manual assessments
+                df_automated = df_trends[df_trends['assessment_type'] == 'automated']
+                df_manual = df_trends[df_trends['assessment_type'] == 'manual']
+                
+                # Create figure with both types
+                fig = go.Figure()
+                
+                # Add automated evaluations line
+                if not df_automated.empty:
+                    fig.add_trace(go.Scatter(
+                        x=df_automated['timestamp'],
+                        y=df_automated['average_score'],
+                        mode='lines+markers',
+                        name='Automated Evaluation',
+                        marker=dict(color='#636EFA', size=8, symbol='circle'),
+                        hovertemplate='<b>Automated Evaluation</b><br>Date: %{x}<br>Score: %{y:.2f}/4<extra></extra>'
+                    ))
+                
+                # Add manual assessments with different color and marker
+                if not df_manual.empty:
+                    fig.add_trace(go.Scatter(
+                        x=df_manual['timestamp'],
+                        y=df_manual['average_score'],
+                        mode='markers',
+                        name='Manual Assessment',
+                        marker=dict(color='#00CC96', size=10, symbol='square'),
+                        hovertemplate='<b>Manual Assessment</b><br>Date: %{x}<br>Score: %{y:.2f}/4<extra></extra>'
+                    ))
+                
+                # Only show chart if we have at least one data point
+                if not df_automated.empty or not df_manual.empty:
+                    fig.update_layout(
+                        height=400,
+                        title='Accuracy Over Time',
+                        xaxis_title='Date',
+                        yaxis_title='Average Score (/4)',
+                        hovermode='closest',
+                        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Show table of all evaluations and assessments
+                st.subheader("All Evaluation Runs")
+                display_df = df_trends[['timestamp', 'total_questions', 'average_score', 'assessment_type']].copy()
+                display_df['assessment_type'] = display_df['assessment_type'].map({'automated': 'Automated', 'manual': 'Manual'})
+                st.dataframe(
+                    display_df.rename(columns={
+                        'timestamp': 'Date',
+                        'total_questions': 'Questions',
+                        'average_score': 'Avg Score (/4)',
+                        'assessment_type': 'Type'
+                    }),
+                    use_container_width=True
+                )
+            elif len(all_data) == 1:
+                st.info("Run multiple evaluations or manual assessments over time to see trends.")
+            else:
+                st.info("Run multiple evaluations over time to see trends. Currently showing only one evaluation.")
+                st.write("To run a new evaluation: `python monitoring/evaluate_rag.py`")
         except Exception as e:
             st.error(f"Error fetching historical data: {e}")
             st.info("Historical data unavailable. Make sure the FastAPI server is running.")
+    
+    # Tab 4: Manual Assessment
+    with tab4:
+        st.header("Manual Assessment")
+        st.markdown("Generate a random sample of 20 questions from the latest evaluation and manually assess accuracy and citation scores.")
+        
+        # Initialize session state for manual assessment
+        if 'manual_assessment_questions' not in st.session_state:
+            st.session_state.manual_assessment_questions = None
+        if 'manual_scores' not in st.session_state:
+            st.session_state.manual_scores = {}
+        
+        # Step 1: Generate random sample
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("Step 1: Generate Random Sample")
+            if st.button("Generate Random Sample of 20 Questions", type="primary"):
+                try:
+                    response = requests.post(f"{API_URL}/monitoring/manual_assessment/start", timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if 'error' in data:
+                            st.error(data['error'])
+                        else:
+                            st.session_state.manual_assessment_questions = data.get('questions', [])
+                            st.session_state.manual_scores = {}
+                            st.success(f"✅ Generated {len(st.session_state.manual_assessment_questions)} random questions!")
+                            st.rerun()
+                    else:
+                        st.error(f"Error generating sample: {response.status_code}")
+                except Exception as e:
+                    st.error(f"Error connecting to API: {str(e)}")
+        
+        # Step 2: Display questions and scoring form
+        if st.session_state.manual_assessment_questions:
+            st.divider()
+            st.subheader("Step 2: Assess Questions")
+            st.markdown("Rate each question on a scale of 1-4 for both Accuracy and Citation Score.")
+            
+            # Display questions with scoring inputs
+            for idx, question_data in enumerate(st.session_state.manual_assessment_questions):
+                with st.expander(f"Question {idx + 1}: {question_data.get('question', '')[:80]}...", expanded=False):
+                    st.markdown(f"**Question:** {question_data.get('question', '')}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**RAG Answer:**")
+                        st.text_area("", question_data.get('rag_answer', ''), height=150, disabled=True, key=f"manual_rag_{idx}")
+                    
+                    with col2:
+                        st.markdown("**Expected Answer:**")
+                        expected = question_data.get('expected_answer', 'N/A')
+                        st.text_area("", expected, height=150, disabled=True, key=f"manual_exp_{idx}")
+                    
+                    # Show ground truth sources if available
+                    if 'ground_truth_sources' in question_data and pd.notna(question_data.get('ground_truth_sources')) and str(question_data.get('ground_truth_sources', '')).strip():
+                        st.markdown("**Expected Sources (Ground Truth):**")
+                        st.info(str(question_data.get('ground_truth_sources', '')))
+                    
+                    # Show retrieved chunks from vector database
+                    contexts = question_data.get('contexts', [])
+                    if contexts:
+                        # Handle contexts if they're JSON strings
+                        if isinstance(contexts, str):
+                            try:
+                                import json
+                                contexts = json.loads(contexts)
+                            except:
+                                contexts = []
+                        
+                        if contexts and len(contexts) > 0:
+                            st.markdown("**Retrieved Chunks from Vector Database:**")
+                            st.caption(f"Retrieved {len(contexts)} chunks (default: 4 chunks, ~2000 characters each)")
+                            
+                            for chunk_idx, context in enumerate(contexts, 1):
+                                source = context.get('source', 'Unknown source')
+                                page = context.get('page', 'N/A')
+                                content = context.get('content', '')
+                                char_count = len(content) if content else 0
+                                
+                                chunk_title = f"Chunk {chunk_idx}: {source}"
+                                if page and page != 'N/A' and pd.notna(page):
+                                    chunk_title += f" (Page {page})"
+                                chunk_title += f" ({char_count} chars)"
+                                
+                                with st.expander(chunk_title, expanded=False):
+                                    st.markdown(f"**Source:** {source}")
+                                    if page and page != 'N/A' and pd.notna(page):
+                                        st.markdown(f"**Page:** {page}")
+                                    st.markdown(f"**Character Count:** {char_count}")
+                                    st.markdown("**Content:**")
+                                    st.text_area("", content, height=200, disabled=True, key=f"manual_chunk_{idx}_{chunk_idx}")
+                    
+                    # Scoring inputs
+                    score_col1, score_col2 = st.columns(2)
+                    with score_col1:
+                        accuracy_score = st.selectbox(
+                            "Accuracy Score (1-4)",
+                            options=[1, 2, 3, 4],
+                            index=2,  # Default to 3
+                            key=f"manual_acc_{idx}",
+                            help="1=Poor, 2=Fair, 3=Good, 4=Excellent"
+                        )
+                    
+                    with score_col2:
+                        citation_score = st.selectbox(
+                            "Citation Score (1-4)",
+                            options=[1, 2, 3, 4],
+                            index=2,  # Default to 3
+                            key=f"manual_cit_{idx}",
+                            help="1=Poor, 2=Fair, 3=Good, 4=Excellent"
+                        )
+                    
+                    # Store scores
+                    st.session_state.manual_scores[idx] = {
+                        'question': question_data.get('question', ''),
+                        'rag_answer': question_data.get('rag_answer', ''),
+                        'expected_answer': question_data.get('expected_answer', ''),
+                        'manual_accuracy_score': accuracy_score,
+                        'manual_citation_score': citation_score
+                    }
+            
+            st.divider()
+            st.subheader("Step 3: Submit Assessment")
+            
+            # Check if all questions are scored
+            all_scored = len(st.session_state.manual_scores) == len(st.session_state.manual_assessment_questions)
+            
+            if st.button("Submit Manual Assessment", type="primary", disabled=not all_scored):
+                if not all_scored:
+                    st.warning("Please score all questions before submitting.")
+                else:
+                    try:
+                        # Prepare submission data
+                        questions = list(st.session_state.manual_scores.values())
+                        response = requests.post(
+                            f"{API_URL}/monitoring/manual_assessment/submit",
+                            json={"questions": questions},
+                            timeout=30
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            if data.get('success'):
+                                st.success(f"✅ Manual assessment saved successfully! Timestamp: {data.get('timestamp', '')}")
+                                # Clear session state
+                                st.session_state.manual_assessment_questions = None
+                                st.session_state.manual_scores = {}
+                                st.rerun()
+                            else:
+                                st.error(f"Error: {data.get('error', 'Unknown error')}")
+                        else:
+                            st.error(f"Error submitting assessment: {response.status_code}")
+                    except Exception as e:
+                        st.error(f"Error connecting to API: {str(e)}")
+            
+            if not all_scored:
+                st.info(f"📝 Please score all {len(st.session_state.manual_assessment_questions)} questions before submitting.")
 

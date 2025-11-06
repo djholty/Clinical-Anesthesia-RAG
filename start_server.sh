@@ -2,6 +2,11 @@
 # Start FastAPI server with proper reload exclusions
 # This excludes .venv, __pycache__, and other non-source directories from file watching
 
+# Activate virtual environment if it exists
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+fi
+
 uvicorn app.main:app \
     --reload \
     --reload-exclude '.venv/*' \

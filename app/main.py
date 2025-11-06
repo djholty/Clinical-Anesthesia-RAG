@@ -11,7 +11,15 @@ import secrets
 import logging
 from pydantic import BaseModel
 from app.rag_pipeline import query_rag, add_pdf_to_db, list_documents, delete_document
-from app.monitoring import get_latest_evaluation, get_all_evaluations, get_evaluation_by_timestamp
+from app.monitoring import (
+    get_latest_evaluation, 
+    get_all_evaluations, 
+    get_evaluation_by_timestamp,
+    get_random_questions_sample,
+    save_manual_assessment,
+    get_all_manual_assessments,
+    get_latest_manual_assessment
+)
 from app.security_utils import sanitize_filename, MAX_UPLOAD_SIZE, validate_file_size, validate_pdf_content
 import shutil
 import os
@@ -307,6 +315,54 @@ def get_eval_by_timestamp(timestamp: str):
     if result is None:
         return {"error": f"Evaluation not found for timestamp: {timestamp}"}
     return result
+
+# Manual Assessment Endpoints
+class ManualAssessmentRequest(BaseModel):
+    questions: list
+
+@app.post("/monitoring/manual_assessment/start")
+def start_manual_assessment():
+    """Generate random sample of 20 questions from latest evaluation."""
+    try:
+        sample = get_random_questions_sample(n=20)
+        if sample is None:
+            return {"error": "No evaluation results found. Run an evaluation first."}
+        return {"questions": sample}
+    except Exception as e:
+        logger.error(f"Error generating random sample: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating random sample: {str(e)}")
+
+@app.post("/monitoring/manual_assessment/submit")
+def submit_manual_assessment(request: ManualAssessmentRequest):
+    """Save manual assessment results."""
+    try:
+        timestamp = save_manual_assessment({"questions": request.questions})
+        return {"success": True, "timestamp": timestamp, "message": "Manual assessment saved successfully"}
+    except Exception as e:
+        logger.error(f"Error saving manual assessment: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error saving manual assessment: {str(e)}")
+
+@app.get("/monitoring/manual_assessments")
+def get_all_manual_assessments_endpoint():
+    """Get summary of all manual assessment runs."""
+    try:
+        assessments = get_all_manual_assessments()
+        return {"assessments": assessments}
+    except Exception as e:
+        logger.error(f"Error getting manual assessments: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting manual assessments: {str(e)}")
+
+@app.get("/monitoring/manual_assessment/latest")
+def get_latest_manual_assessment_endpoint():
+    """Get the most recent manual assessment results."""
+    try:
+        result = get_latest_manual_assessment()
+        if result is None:
+            return {"error": "No manual assessment results found"}
+        return result
+    except Exception as e:
+        logger.error(f"Error getting latest manual assessment: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting latest manual assessment: {str(e)}")
 
 def run_evaluation_task():
     """Background task to run evaluation."""
