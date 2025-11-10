@@ -308,14 +308,6 @@ def get_evaluation_status():
     print(f"DEBUG: Returning status: {result}")
     return result
 
-@app.get("/monitoring/{timestamp}")
-def get_eval_by_timestamp(timestamp: str):
-    """Get specific evaluation by timestamp."""
-    result = get_evaluation_by_timestamp(timestamp)
-    if result is None:
-        return {"error": f"Evaluation not found for timestamp: {timestamp}"}
-    return result
-
 # Manual Assessment Endpoints
 class ManualAssessmentRequest(BaseModel):
     questions: list
@@ -363,6 +355,14 @@ def get_latest_manual_assessment_endpoint():
     except Exception as e:
         logger.error(f"Error getting latest manual assessment: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting latest manual assessment: {str(e)}")
+
+@app.get("/monitoring/{timestamp}")
+def get_eval_by_timestamp(timestamp: str):
+    """Get specific evaluation by timestamp."""
+    result = get_evaluation_by_timestamp(timestamp)
+    if result is None:
+        return {"error": f"Evaluation not found for timestamp: {timestamp}"}
+    return result
 
 def run_evaluation_task():
     """Background task to run evaluation."""
