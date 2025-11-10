@@ -826,7 +826,7 @@ elif page == "🔐 Admin":
                     showlegend=True,
                     legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="accuracy_dist_chart_with_citation")
             
             with col2:
                 st.subheader("Citation Score Distribution")
@@ -874,7 +874,7 @@ elif page == "🔐 Admin":
                         showlegend=True,
                         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key="citation_dist_chart")
                 else:
                     st.info("No citation scores available")
         else:
@@ -925,7 +925,7 @@ elif page == "🔐 Admin":
                     showlegend=True,
                     legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="accuracy_dist_chart_no_citation")
         
         # Citation sub-metrics visualization removed - keeping only citation_score and correctness
         if False:  # 'average_citation_score' in data:
@@ -988,7 +988,7 @@ elif page == "🔐 Admin":
                         )
                         fig.update_traces(marker=dict(line=dict(width=0.5, color='white')))
                         fig.update_layout(height=400, showlegend=False)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True, key="faithfulness_grounding_scatter")
                     else:
                         st.info("Insufficient data for scatter plot")
                 
@@ -1022,7 +1022,7 @@ elif page == "🔐 Admin":
                             line=dict(dash="dash", color="gray", width=1),
                             x0=0, x1=1, y0=0, y1=1
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True, key="precision_recall_scatter")
                     else:
                         st.info("Precision/Recall require ground truth sources")
                 
@@ -1244,13 +1244,16 @@ elif page == "🔐 Admin":
                                 chunk_title += f" (Page {page})"
                             chunk_title += f" ({char_count} chars)"
                             
-                            with st.expander(chunk_title, expanded=False):
+                            # Use container instead of expander to avoid nesting
+                            with st.container():
+                                st.markdown(f"**{chunk_title}**")
                                 st.markdown(f"**Source:** {source}")
                                 if page and page != 'N/A' and pd.notna(page):
                                     st.markdown(f"**Page:** {page}")
                                 st.markdown(f"**Character Count:** {char_count}")
                                 st.markdown("**Content:**")
                                 st.text_area("", content, height=200, disabled=True, key=f"chunk_{idx}_{chunk_idx}")
+                                st.divider()
                 
                 st.markdown("**Correctness Evaluation Reasoning:**")
                 st.info(row['reasoning'])
@@ -1363,7 +1366,7 @@ elif page == "🔐 Admin":
                         hovermode='closest',
                         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key="historical_trends_chart")
                 
                 # Show table of all evaluations and assessments
                 st.subheader("All Evaluation Runs")
@@ -1471,13 +1474,16 @@ elif page == "🔐 Admin":
                                     chunk_title += f" (Page {page})"
                                 chunk_title += f" ({char_count} chars)"
                                 
-                                with st.expander(chunk_title, expanded=False):
+                                # Use container instead of expander to avoid nesting
+                                with st.container():
+                                    st.markdown(f"**{chunk_title}**")
                                     st.markdown(f"**Source:** {source}")
                                     if page and page != 'N/A' and pd.notna(page):
                                         st.markdown(f"**Page:** {page}")
                                     st.markdown(f"**Character Count:** {char_count}")
                                     st.markdown("**Content:**")
                                     st.text_area("", content, height=200, disabled=True, key=f"manual_chunk_{idx}_{chunk_idx}")
+                                    st.divider()
                     
                     # Scoring inputs
                     score_col1, score_col2 = st.columns(2)

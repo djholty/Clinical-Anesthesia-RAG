@@ -112,6 +112,10 @@ def format_docs(docs):
     """Format documents with source citations."""
     formatted = []
     for doc in docs:
+        # Skip documents with None or empty page_content
+        if not doc.page_content or not doc.page_content.strip():
+            continue
+        
         source = "Unknown source"
         if doc.metadata and "source" in doc.metadata:
             # Extract filename from full path
@@ -161,12 +165,21 @@ def query_rag(question: str):
     # Retrieve documents first
     retrieved_docs = retriever.invoke(question)
     
+    # Filter out documents with None or empty page_content
+    valid_docs = [doc for doc in retrieved_docs if doc.page_content and doc.page_content.strip()]
+    
+    if not valid_docs:
+        return {
+            "answer": "The available context does not provide sufficient information to answer this question.",
+            "contexts": []
+        }
+    
     # Format documents for the prompt
-    formatted_context = format_docs(retrieved_docs)
+    formatted_context = format_docs(valid_docs)
 
-    # Build allowed sources set from retrieved documents (dynamic per request)
+    # Build allowed sources set from valid documents (dynamic per request)
     allowed_sources_set = set()
-    for doc in retrieved_docs:
+    for doc in valid_docs:
         if doc.metadata and "source" in doc.metadata:
             source_path = doc.metadata["source"]
             filename = source_path.split("/")[-1] if "/" in source_path else source_path
@@ -233,9 +246,13 @@ def query_rag(question: str):
     if 'response' not in locals():
         raise last_exception if last_exception else Exception("Failed to get LLM response")
     
-    # Extract contexts with metadata
+    # Extract contexts with metadata (only from valid documents)
     contexts = []
-    for doc in retrieved_docs:
+    for doc in valid_docs:
+        # Skip documents with None or empty page_content
+        if not doc.page_content or not doc.page_content.strip():
+            continue
+        
         context_dict = {
             "content": doc.page_content
         }
