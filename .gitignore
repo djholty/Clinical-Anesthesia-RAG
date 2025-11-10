@@ -11,6 +11,8 @@ venv/
 
 # Ignore environment variables file
 .env
+.env.bak
+*.env.bak
 
 # Ignore personal work files
 david_work_files/
