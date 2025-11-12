@@ -827,7 +827,7 @@ elif page == "🔐 Admin":
                     legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
                 )
                 st.plotly_chart(fig, use_container_width=True, key="accuracy_dist_chart_with_citation")
-            
+        
             with col2:
                 st.subheader("Citation Score Distribution")
                 cit_scores = [r.get('citation_score', 0) for r in data['results'] if 'citation_score' in r and pd.notna(r.get('citation_score'))]
@@ -1057,7 +1057,7 @@ elif page == "🔐 Admin":
                 st.error(f"**Score: {row['score']}/4**")
                 st.write(f"Q: {row['question'][:100]}...")
                 st.write("")
-        
+            
     # Tab 2: Detailed Results
     with tab2:
         st.header("Detailed Question-by-Question Results")
@@ -1252,7 +1252,7 @@ elif page == "🔐 Admin":
                                     st.markdown(f"**Page:** {page}")
                                 st.markdown(f"**Character Count:** {char_count}")
                                 st.markdown("**Content:**")
-                                st.text_area("", content, height=200, disabled=True, key=f"chunk_{idx}_{chunk_idx}")
+                                st.text_area("Content", content, height=200, disabled=True, key=f"chunk_{idx}_{chunk_idx}", label_visibility="hidden")
                                 st.divider()
                 
                 st.markdown("**Correctness Evaluation Reasoning:**")
@@ -1272,7 +1272,7 @@ elif page == "🔐 Admin":
             all_evals = []
             if all_evals_response.status_code == 200:
                 all_evals = all_evals_response.json()['evaluations']
-            
+                
             # Fetch manual assessments
             manual_assessments = []
             try:
@@ -1326,7 +1326,7 @@ elif page == "🔐 Admin":
                 # Drop rows where timestamp parsing failed
                 df_trends = df_trends.dropna(subset=['timestamp'])
                 df_trends = df_trends.sort_values('timestamp')
-                
+                    
                 # Separate automated and manual assessments
                 df_automated = df_trends[df_trends['assessment_type'] == 'automated']
                 df_manual = df_trends[df_trends['assessment_type'] == 'manual']
@@ -1436,12 +1436,12 @@ elif page == "🔐 Admin":
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown("**RAG Answer:**")
-                        st.text_area("", question_data.get('rag_answer', ''), height=150, disabled=True, key=f"manual_rag_{idx}")
+                        st.text_area("RAG Answer", question_data.get('rag_answer', ''), height=150, disabled=True, key=f"manual_rag_{idx}", label_visibility="hidden")
                     
                     with col2:
                         st.markdown("**Expected Answer:**")
                         expected = question_data.get('expected_answer', 'N/A')
-                        st.text_area("", expected, height=150, disabled=True, key=f"manual_exp_{idx}")
+                        st.text_area("Expected Answer", expected, height=150, disabled=True, key=f"manual_exp_{idx}", label_visibility="hidden")
                     
                     # Show ground truth sources if available
                     if 'ground_truth_sources' in question_data and pd.notna(question_data.get('ground_truth_sources')) and str(question_data.get('ground_truth_sources', '')).strip():
@@ -1482,7 +1482,7 @@ elif page == "🔐 Admin":
                                         st.markdown(f"**Page:** {page}")
                                     st.markdown(f"**Character Count:** {char_count}")
                                     st.markdown("**Content:**")
-                                    st.text_area("", content, height=200, disabled=True, key=f"manual_chunk_{idx}_{chunk_idx}")
+                                    st.text_area("Chunk Content", content, height=200, disabled=True, key=f"manual_chunk_{idx}_{chunk_idx}", label_visibility="hidden")
                                     st.divider()
                     
                     # Scoring inputs
