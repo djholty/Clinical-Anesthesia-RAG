@@ -44,6 +44,10 @@ st.markdown("""
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["💬 Ask Questions", "🔐 Admin"])
 
+# Theme info
+with st.sidebar.expander("🎨 Theme", expanded=False):
+    st.caption("Switch between light and dark themes using the ⋮ menu → Settings → Theme")
+
 # Page 1: Ask Questions (Original Frontend)
 if page == "💬 Ask Questions":
     st.title("💉 Clinical Anesthesia QA System")
