@@ -11,12 +11,13 @@ enableXsrfProtection = true
 # Automatically open browser on startup
 gatherUsageStats = false
 
-[theme]
-# Medical Theme - Professional medical theme with blue accents
-base = "light"
-primaryColor = "#1E88E5"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F7FA"
-textColor = "#262730"
-font = "sans serif"
+# Theme configuration - Users can change themes via Settings menu (⋮ → Settings → Theme)
+# Uncomment below to set a default theme, or leave commented to allow full user control
+# [theme]
+# base = "light"  # Options: "light" or "dark"
+# primaryColor = "#1E88E5"
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F5F7FA"
+# textColor = "#262730"
+# font = "sans serif"
 

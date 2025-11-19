@@ -50,7 +50,7 @@ with st.sidebar.expander("🎨 Theme", expanded=False):
 
 # Page 1: Ask Questions (Original Frontend)
 if page == "💬 Ask Questions":
-    st.title("💉 Clinical Anesthesia QA System")
+    st.title("💉 Clinical Anesthesia RAG QA System")
     st.write("Interact with your custom RAG model using uploaded PDF guidelines.")
     
     # --- Chat section ---

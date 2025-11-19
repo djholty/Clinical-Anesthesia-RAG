@@ -18,6 +18,9 @@ COPY templates ./templates
 # Create necessary directories
 RUN mkdir -p uploads data/ingested_documents data/chroma_db data/pdfs
 
+# Set PYTHONPATH to include /app so imports work correctly
+ENV PYTHONPATH=/app
+
 # Expose the backend port
 EXPOSE 8000
 
