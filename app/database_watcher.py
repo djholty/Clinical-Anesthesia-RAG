@@ -173,9 +173,17 @@ def main():
     logger.info(f"   Rebuild on Startup: {REBUILD_ON_STARTUP}")
     logger.info("=" * 60)
     
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Register signal handlers for graceful shutdown (only in main thread)
+    # When running as a background thread, signals are handled by the main process
+    try:
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+        else:
+            logger.info("Running as background thread - signal handlers will be managed by main process")
+    except (ValueError, AttributeError):
+        # Signal registration failed (not main thread) - this is expected when running as a thread
+        logger.info("Running as background thread - shutdown will be handled via shutdown_event")
     
     # Check if watch directory exists
     watch_path = Path(WATCH_DIRECTORY)

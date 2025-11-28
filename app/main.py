@@ -9,6 +9,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 import secrets
 import logging
+import threading
+import asyncio
 from pydantic import BaseModel
 from app.rag_pipeline import query_rag, add_pdf_to_db, list_documents, delete_document
 from app.monitoring import (
@@ -42,6 +44,10 @@ from evaluate_rag import run_evaluation
 app = FastAPI(title="RAG Model API", version="1.3")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 security = HTTPBasic()
+
+# Global watcher threads
+pdf_watcher_thread = None
+database_watcher_thread = None
 
 # Configure CORS - allow requests from Streamlit frontend and all localhost origins
 app.add_middleware(
@@ -113,10 +119,21 @@ def home():
 @app.get("/health")
 def health_check():
     """Health check endpoint for monitoring."""
+    # Check watcher thread status
+    watcher_status = {
+        "pdf_watcher": {
+            "running": pdf_watcher_thread is not None and pdf_watcher_thread.is_alive() if pdf_watcher_thread else False
+        },
+        "database_watcher": {
+            "running": database_watcher_thread is not None and database_watcher_thread.is_alive() if database_watcher_thread else False
+        }
+    }
+    
     return {
         "status": "healthy",
         "server": "running",
-        "evaluation_status": evaluation_status
+        "evaluation_status": evaluation_status,
+        "watchers": watcher_status
     }
 
 @app.post("/ask")
@@ -254,6 +271,38 @@ def get_list_of_documents():
     """List all documents currently stored in the vector DB."""
     docs = list_documents()
     return {"documents": docs}
+
+@app.get("/debug/retrieve")
+def debug_retrieve(question: str = "test tubes"):
+    """Debug endpoint to see what documents are retrieved for a query."""
+    try:
+        from app.rag_pipeline import retriever, RETRIEVER_K
+        # Log the k value being used
+        logger.info(f"Debug retrieve: question='{question}', RETRIEVER_K={RETRIEVER_K}")
+        
+        retrieved_docs = retriever.invoke(question)
+        
+        results = []
+        for i, doc in enumerate(retrieved_docs):
+            source = doc.metadata.get("source", "Unknown") if doc.metadata else "Unknown"
+            source_name = source.split("/")[-1] if "/" in source else source
+            results.append({
+                "rank": i + 1,
+                "source": source_name,
+                "content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                "content_length": len(doc.page_content),
+                "metadata": doc.metadata
+            })
+        
+        return {
+            "question": question,
+            "retriever_k": RETRIEVER_K,
+            "total_retrieved": len(retrieved_docs),
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error in debug retrieve: {e}", exc_info=True)
+        return {"error": str(e)}
 
 @app.delete("/delete_doc")
 def delete_file_docs(request: DeleteRequest):
@@ -601,4 +650,91 @@ async def admin_upload_pdf(request: Request, file: UploadFile = File(...), backg
         logger.error(f"Error in admin upload: {str(e)}", exc_info=True)
         # Return generic error to user
         raise HTTPException(status_code=500, detail="An error occurred during upload. Please try again later.")
+
+
+# ==========================
+# File Watcher Integration
+# ==========================
+
+def run_pdf_watcher():
+    """Run PDF watcher in a separate thread."""
+    try:
+        from app.pdf_watcher import main as pdf_watcher_main
+        logger.info("Starting PDF watcher thread...")
+        pdf_watcher_main()
+    except Exception as e:
+        logger.error(f"PDF watcher thread error: {e}", exc_info=True)
+
+
+def run_database_watcher():
+    """Run database watcher in a separate thread."""
+    try:
+        from app.database_watcher import main as database_watcher_main
+        logger.info("Starting database watcher thread...")
+        database_watcher_main()
+    except Exception as e:
+        logger.error(f"Database watcher thread error: {e}", exc_info=True)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start file watchers on backend startup."""
+    global pdf_watcher_thread, database_watcher_thread
+    
+    # Check if watchers should be enabled (default: True, can be disabled via env var)
+    enable_watchers = os.getenv("ENABLE_FILE_WATCHERS", "true").lower() == "true"
+    
+    if not enable_watchers:
+        logger.info("File watchers disabled via ENABLE_FILE_WATCHERS environment variable")
+        return
+    
+    logger.info("=" * 60)
+    logger.info("Starting file watchers...")
+    logger.info("=" * 60)
+    
+    # Start PDF watcher thread
+    try:
+        pdf_watcher_thread = threading.Thread(target=run_pdf_watcher, daemon=True, name="PDFWatcher")
+        pdf_watcher_thread.start()
+        logger.info("✅ PDF watcher thread started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start PDF watcher: {e}", exc_info=True)
+    
+    # Start database watcher thread
+    try:
+        database_watcher_thread = threading.Thread(target=run_database_watcher, daemon=True, name="DatabaseWatcher")
+        database_watcher_thread.start()
+        logger.info("✅ Database watcher thread started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start database watcher: {e}", exc_info=True)
+    
+    logger.info("=" * 60)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Gracefully stop file watchers on backend shutdown."""
+    global pdf_watcher_thread, database_watcher_thread
+    
+    logger.info("Shutting down file watchers...")
+    
+    # Signal watchers to stop by setting their shutdown events
+    try:
+        from app.pdf_watcher import shutdown_event as pdf_shutdown_event
+        pdf_shutdown_event.set()
+        logger.info("Signaled PDF watcher to stop")
+    except Exception as e:
+        logger.warning(f"Could not signal PDF watcher shutdown: {e}")
+    
+    try:
+        from app.database_watcher import shutdown_event as db_shutdown_event
+        db_shutdown_event.set()
+        logger.info("Signaled database watcher to stop")
+    except Exception as e:
+        logger.warning(f"Could not signal database watcher shutdown: {e}")
+    
+    # Give watchers a moment to clean up
+    await asyncio.sleep(1)
+    
+    logger.info("File watchers shutdown complete")
 

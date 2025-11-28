@@ -138,8 +138,17 @@ def main():
     logger.info(f"   Quiet Period: {PDF_QUIET_PERIOD_SECONDS} seconds")
     logger.info("=" * 60)
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Register signal handlers for graceful shutdown (only in main thread)
+    # When running as a background thread, signals are handled by the main process
+    try:
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+        else:
+            logger.info("Running as background thread - signal handlers will be managed by main process")
+    except (ValueError, AttributeError):
+        # Signal registration failed (not main thread) - this is expected when running as a thread
+        logger.info("Running as background thread - shutdown will be handled via shutdown_event")
 
     watch_path = Path(PDF_WATCH_DIRECTORY)
     if not watch_path.exists():

@@ -12,6 +12,26 @@ services:
       - '${PWD}/data/chroma_db:/app/data/chroma_db'
       - '${PWD}/data/pdfs:/app/data/pdfs'
       - '${PWD}/uploads:/app/uploads'
+    environment:
+      # PDF Watcher configuration
+      - PDF_WATCH_DIRECTORY=/app/data/pdfs
+      - MD_OUTPUT_DIR=/app/data/ingested_documents
+      - PDF_QUIET_PERIOD_SECONDS=${PDF_QUIET_PERIOD_SECONDS:-120}
+      - PDF_CONVERT_ON_STARTUP=${PDF_CONVERT_ON_STARTUP:-true}
+      # Database Watcher configuration
+      - QUIET_PERIOD_SECONDS=${QUIET_PERIOD_SECONDS:-300}
+      - WATCH_DIRECTORY=/app/data/ingested_documents
+      - DB_DIR=/app/data/chroma_db
+      - MARKDOWN_DIR=/app/data/ingested_documents
+      - REBUILD_ON_STARTUP=${REBUILD_ON_STARTUP:-false}
+      # Enable/disable watchers (default: true)
+      - ENABLE_FILE_WATCHERS=${ENABLE_FILE_WATCHERS:-true}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:
@@ -25,45 +45,3 @@ services:
       - backend
     environment:
       - API_URL=http://backend:8000
-
-  watcher:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: clinical-rag-watcher
-    env_file: .env
-    volumes:
-      - '${PWD}/data/ingested_documents:/app/data/ingested_documents'
-      - '${PWD}/data/chroma_db:/app/data/chroma_db'
-    environment:
-      - QUIET_PERIOD_SECONDS=300
-      - WATCH_DIRECTORY=/app/data/ingested_documents
-      - DB_DIR=/app/data/chroma_db
-      - MARKDOWN_DIR=/app/data/ingested_documents
-      - REBUILD_ON_STARTUP=false
-    depends_on:
-      - backend
-    restart: unless-stopped
-    command: python app/database_watcher.py
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  pdf_watcher:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: clinical-rag-pdf-watcher
-    env_file: .env
-    volumes:
-      - '${PWD}/data/pdfs:/app/data/pdfs'
-      - '${PWD}/data/ingested_documents:/app/data/ingested_documents'
-    environment:
-      - PDF_WATCH_DIRECTORY=/app/data/pdfs
-      - MD_OUTPUT_DIR=/app/data/ingested_documents
-      - PDF_QUIET_PERIOD_SECONDS=${PDF_QUIET_PERIOD_SECONDS}
-      - PDF_CONVERT_ON_STARTUP=${PDF_CONVERT_ON_STARTUP}
-    restart: unless-stopped
-    command: python app/pdf_watcher.py

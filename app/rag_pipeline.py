@@ -50,7 +50,13 @@ except Exception as e:
 # Persistent DB directory (can be overridden via env DB_DIR)
 DB_DIR = os.getenv("DB_DIR", "./data/chroma_db")
 vectordb = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
-retriever = vectordb.as_retriever()
+
+# Configure retriever with search parameters
+# Retrieve more documents to improve recall, especially for short documents
+RETRIEVER_K = int(os.getenv("RETRIEVER_K", "5"))  # Number of documents to retrieve (default: 5)
+retriever = vectordb.as_retriever(
+    search_kwargs={"k": RETRIEVER_K}
+)
 
 # LLM (Groq) - Configure with timeout
 llm = ChatGroq(
