@@ -1,5 +1,13 @@
 # Clinical-Anesthesia-QA-System-using-RAG-and-LLMs
 An AI assistant for anesthesia knoweldge using retrieval-augmented generation and LLMs to answer clinical questions
+
+## Demo Video
+
+<video width="800" controls>
+  <source src="docs/videos/Screen Recording 2026-01-09 at 10.14.54 AM.mov" type="video/quicktime">
+  Your browser does not support the video tag.
+</video>
+
 ## Admin Page
 
 - Start API: 
@@ -9,6 +17,8 @@ An AI assistant for anesthesia knoweldge using retrieval-augmented generation an
   - Monitor evaluation status (auto-refreshes every 2s)
   - Trigger evaluations
   - Upload PDFs to `data/pdfs`
+
+![Admin Dashboard Screenshot](docs/images/Screenshot%202026-01-09%20at%2010.11.25%20AM.png)
 
 Optional automatic PDF→Markdown conversion:
 
@@ -147,6 +157,8 @@ The goal is to make an intelligent system that could help an anesthesiologist as
 ## Project Overview
 -Collect anesthesia-related documents as knoweldge base.  
 -Use a **retriever** to fetch relevant document chunks.
+
+![System Screenshot](docs/images/Screenshot%202026-01-09%20at%2010.11.50%20AM.png)
 
 ---
 
