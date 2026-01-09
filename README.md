@@ -4,9 +4,11 @@ An AI assistant for anesthesia knoweldge using retrieval-augmented generation an
 ## Demo Video
 
 <video width="800" controls>
-  <source src="docs/videos/Screen Recording 2026-01-09 at 10.14.54 AM.mov" type="video/quicktime">
+  <source src="docs/videos/demo-video.mov" type="video/quicktime">
   Your browser does not support the video tag.
 </video>
+
+**Note:** If the video doesn't play, you can [download it directly](docs/videos/demo-video.mov).
 
 ## Admin Page
 
