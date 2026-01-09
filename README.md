@@ -151,7 +151,7 @@ The goal is to make an intelligent system that could help an anesthesiologist as
 -Collect anesthesia-related documents as knoweldge base.  
 -Use a **retriever** to fetch relevant document chunks.
 
-### Screenshots
+### Screenshots of Monitoring Dashboard
 
 ![Admin Dashboard](docs/images/admin-dashboard.png)
 
