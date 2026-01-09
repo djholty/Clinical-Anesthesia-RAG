@@ -18,7 +18,7 @@ An AI assistant for anesthesia knoweldge using retrieval-augmented generation an
   - Trigger evaluations
   - Upload PDFs to `data/pdfs`
 
-![Admin Dashboard Screenshot](docs/images/Screenshot%202026-01-09%20at%2010.11.25%20AM.png)
+![Admin Dashboard Screenshot](docs/images/admin-dashboard.png)
 
 Optional automatic PDF→Markdown conversion:
 
@@ -158,7 +158,7 @@ The goal is to make an intelligent system that could help an anesthesiologist as
 -Collect anesthesia-related documents as knoweldge base.  
 -Use a **retriever** to fetch relevant document chunks.
 
-![System Screenshot](docs/images/Screenshot%202026-01-09%20at%2010.11.50%20AM.png)
+![System Screenshot](docs/images/system-screenshot.png)
 
 ---
 
