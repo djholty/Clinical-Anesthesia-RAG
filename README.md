@@ -3,12 +3,13 @@ An AI assistant for anesthesia knoweldge using retrieval-augmented generation an
 
 ## Demo Video
 
-<video width="800" controls>
-  <source src="docs/videos/demo-video.mov" type="video/quicktime">
-  Your browser does not support the video tag.
-</video>
+📹 [Watch the demo video](docs/videos/demo-video.mov) (click to download/view)
 
-**Note:** If the video doesn't play, you can [download it directly](docs/videos/demo-video.mov).
+**Note:** GitHub README files don't support embedded video players. Click the link above to view the demo video, or upload it to YouTube and embed it using:
+
+```markdown
+[![Demo Video](https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+```
 
 ## Admin Page
 
