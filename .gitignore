@@ -1,11 +1,21 @@
 # Ignore data directory (raw/processed docs, embeddings, etc.)
-data/
+# But allow tracking of ingested_documents and pdfs
+# Note: chroma_db is excluded due to size (can be regenerated)
+data/*
+!data/ingested_documents/
+!data/pdfs/
 
 # Ignore Python virtual environment
 venv/
+.venv/
 
 # Ignore environment variables file
 .env
+.env.bak
+*.env.bak
+
+# Ignore personal work files
+david_work_files/
 
 # (optional) Python cache & junk
 __pycache__/
@@ -14,3 +24,5 @@ __pycache__/
 *.pyd
 *.pkl
 .ipynb_checkpoints/
+
+.DS_Store

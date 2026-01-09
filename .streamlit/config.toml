@@ -1,0 +1,23 @@
+[server]
+# Configure server settings
+port = 8501
+address = "0.0.0.0"
+
+# Enable CORS for static files
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+# Automatically open browser on startup
+gatherUsageStats = false
+
+# Theme configuration - Users can change themes via Settings menu (⋮ → Settings → Theme)
+# Uncomment below to set a default theme, or leave commented to allow full user control
+# [theme]
+# base = "light"  # Options: "light" or "dark"
+# primaryColor = "#1E88E5"
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F5F7FA"
+# textColor = "#262730"
+# font = "sans serif"
+
